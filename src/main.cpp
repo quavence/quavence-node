@@ -3744,6 +3744,27 @@ bool CheckStake(CBlock* pblock, CWallet& wallet, const CChainParams& chainparams
     return true;
 }
 
+// Drop mempool txs that cannot be included once block.nTime is the coinstake time.
+// Subtract their template fees from nFees (from CreateNewBlock); do not recompute.
+static bool FilterPoSBlockFeesForStakeTime(CBlock& block, int64_t maxIncludedTxTime, CAmount& nFees)
+{
+    LOCK(mempool.cs);
+    for (size_t i = 1; i < block.vtx.size(); ) {
+        if (block.vtx[i].nTime > maxIncludedTxTime) {
+            CTxMemPool::txiter it = mempool.mapTx.find(block.vtx[i].GetHash());
+            if (it == mempool.mapTx.end())
+                return false;
+            nFees -= it->GetFee();
+            if (nFees < 0)
+                return false;
+            block.vtx.erase(block.vtx.begin() + i);
+        } else {
+            ++i;
+        }
+    }
+    return true;
+}
+
 // novacoin: attempt to generate suitable proof-of-stake
 bool SignBlock(CBlock& block, CWallet& wallet, int64_t& nFees)
 {
@@ -3773,7 +3794,15 @@ bool SignBlock(CBlock& block, CWallet& wallet, int64_t& nFees)
 
     if (nSearchTime > nLastCoinStakeSearchTime)
     {
-        if (wallet.CreateCoinStake(wallet, block.nBits, 1, nFees, txCoinStake, key))
+        // Must match nCoinStakeSearchInterval passed to CreateCoinStake below.
+        const int nCoinStakeSearchInterval = 1;
+        const int nMaxStakeSearchInterval = 60;
+        const int nKernelRewind = std::min(nCoinStakeSearchInterval, nMaxStakeSearchInterval) - 1;
+        const int64_t maxIncludedTxTime = nSearchTime - (nKernelRewind > 0 ? nKernelRewind : 0);
+        if (!FilterPoSBlockFeesForStakeTime(block, maxIncludedTxTime, nFees))
+            return false;
+
+        if (wallet.CreateCoinStake(wallet, block.nBits, nCoinStakeSearchInterval, nFees, txCoinStake, key))
         {
             if (txCoinStake.nTime >= pindexBestHeader->GetPastTimeLimit()+1)
             {
@@ -3789,8 +3818,11 @@ bool SignBlock(CBlock& block, CWallet& wallet, int64_t& nFees)
 
                 // we have to make sure that we have no future timestamps in
                 // our transactions set
+                const size_t nTxBeforeFutureErase = block.vtx.size();
                 for (vector<CTransaction>::iterator it = block.vtx.begin(); it != block.vtx.end();)
                     if (it->nTime > block.nTime) { it = block.vtx.erase(it); } else { ++it; }
+                if (block.vtx.size() != nTxBeforeFutureErase)
+                    return false;
 
                 block.vtx.insert(block.vtx.begin() + 1, txCoinStake);
 
