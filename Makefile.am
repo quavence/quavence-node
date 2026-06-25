@@ -74,6 +74,15 @@ COVERAGE_INFO = baseline_filtered_combined.info baseline.info block_test.info \
 dist-hook:
 	-$(GIT) archive --format=tar HEAD -- src/clientversion.cpp | $(AMTAR) -C $(top_distdir) -xf -
 
+VERIFY_PUBLIC_WIN_RELEASE = @:
+if !ENABLE_BOOTSTRAP_TOOLS
+VERIFY_PUBLIC_WIN_RELEASE = $(PYTHON) $(top_srcdir)/scripts/verify_bootstrap_binaries.py public \
+  $(top_builddir)/release/$(BITCOIN_DAEMON_NAME)$(EXEEXT) \
+  $(top_builddir)/release/$(BITCOIN_CLI_NAME)$(EXEEXT) \
+  $(top_builddir)/release/$(BITCOIN_TX_NAME)$(EXEEXT) \
+  $(top_builddir)/release/$(BITCOIN_GUI_NAME)$(EXEEXT)
+endif
+
 if TARGET_WINDOWS
 $(BITCOIN_WIN_INSTALLER): all-recursive
 	$(MKDIR_P) $(top_builddir)/release
@@ -81,6 +90,7 @@ $(BITCOIN_WIN_INSTALLER): all-recursive
 	STRIPPROG="$(STRIP)" $(INSTALL_STRIP_PROGRAM) $(BITCOIN_QT_BIN) $(top_builddir)/release
 	STRIPPROG="$(STRIP)" $(INSTALL_STRIP_PROGRAM) $(BITCOIN_CLI_BIN) $(top_builddir)/release
 	STRIPPROG="$(STRIP)" $(INSTALL_STRIP_PROGRAM) $(BITCOIN_TX_BIN) $(top_builddir)/release
+	$(VERIFY_PUBLIC_WIN_RELEASE)
 	@test -f $(MAKENSIS) && echo 'OutFile "$@"' | cat $(top_builddir)/share/setup.nsi - | $(MAKENSIS) -V2 - || \
 	  echo error: could not build $@
 	@echo built $@

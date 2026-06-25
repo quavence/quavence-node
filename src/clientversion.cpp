@@ -3,10 +3,34 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "clientversion.h"
+#include "quavence_build.h"
 
 #include "tinyformat.h"
 
+#include <config/bitcoin-config.h>
+
 #include <string>
+
+#ifndef QVNC_ENABLE_BOOTSTRAP_TOOLS
+#define QVNC_ENABLE_BOOTSTRAP_TOOLS 0
+#endif
+
+#if defined(__GNUC__) || defined(__clang__)
+#define QVNC_KEEP_SYMBOL __attribute__((used))
+#else
+#define QVNC_KEEP_SYMBOL
+#endif
+
+#if QVNC_ENABLE_BOOTSTRAP_TOOLS
+static const char qvnc_build_variant_marker[] QVNC_KEEP_SYMBOL = "QVNC_BUILD_VARIANT=admin";
+#else
+static const char qvnc_build_variant_marker[] QVNC_KEEP_SYMBOL = "QVNC_BUILD_VARIANT=public";
+#endif
+
+const char* QvncBuildVariantMarker()
+{
+    return qvnc_build_variant_marker;
+}
 
 /**
  * Name of client reported in the 'version' message. Report the same name
@@ -77,6 +101,8 @@ static std::string FormatVersion(int nVersion)
 
 std::string FormatFullVersion()
 {
+    // Touch the immutable build-variant marker so every binary links it.
+    (void)QvncBuildVariantMarker();
     return CLIENT_BUILD;
 }
 

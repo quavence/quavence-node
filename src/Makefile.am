@@ -627,3 +627,42 @@ endif
 if ENABLE_QT_TESTS
 include Makefile.qttest.include
 endif
+
+if !ENABLE_BOOTSTRAP_TOOLS
+.PHONY: verify-public-binaries check-public-release
+PUBLIC_VERIFY_BINS = quavenced$(EXEEXT) quavence-cli$(EXEEXT) quavence-tx$(EXEEXT)
+if ENABLE_QT
+PUBLIC_VERIFY_BINS += qt/quavence-qt$(EXEEXT)
+endif
+
+verify-public-binaries: $(PUBLIC_VERIFY_BINS)
+	@echo "Checking public build variant (bootstrap tools must be absent)..."
+	$(AM_V_GEN)$(PYTHON) $(top_srcdir)/scripts/verify_bootstrap_binaries.py public $(PUBLIC_VERIFY_BINS)
+
+check-public-release: verify-public-binaries
+	QVNC_EXPECT_BOOTSTRAP_TOOLS=0 $(top_srcdir)/scripts/smoke_bootstrap_build.sh
+	@echo "Public release checks passed."
+
+all-local: verify-public-binaries
+
+install-exec-hook:
+	@echo "Post-install public build verification..."
+	$(PYTHON) $(top_srcdir)/scripts/verify_bootstrap_binaries.py public \
+	  $(DESTDIR)$(bindir)/$(BITCOIN_DAEMON_NAME)$(EXEEXT) \
+	  $(DESTDIR)$(bindir)/$(BITCOIN_CLI_NAME)$(EXEEXT) \
+	  $(DESTDIR)$(bindir)/$(BITCOIN_TX_NAME)$(EXEEXT)
+	@if test -f $(DESTDIR)$(bindir)/$(BITCOIN_GUI_NAME)$(EXEEXT); then \
+	  $(PYTHON) $(top_srcdir)/scripts/verify_bootstrap_binaries.py public \
+	    $(DESTDIR)$(bindir)/$(BITCOIN_GUI_NAME)$(EXEEXT); \
+	fi
+endif
+
+if ENABLE_BOOTSTRAP_TOOLS
+ADMIN_VERIFY_BINS = quavenced$(EXEEXT)
+if ENABLE_QT
+ADMIN_VERIFY_BINS += qt/quavence-qt$(EXEEXT)
+endif
+
+verify-admin-binaries: $(ADMIN_VERIFY_BINS)
+	$(PYTHON) $(top_srcdir)/scripts/verify_bootstrap_binaries.py admin $(ADMIN_VERIFY_BINS)
+endif

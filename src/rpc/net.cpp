@@ -13,6 +13,7 @@
 #include "sync.h"
 #include "timedata.h"
 #include "ui_interface.h"
+#include "quavence_build.h"
 #include "util.h"
 #include "utilstrencodings.h"
 #include "version.h"
@@ -431,6 +432,8 @@ UniValue getnetworkinfo(const UniValue& params, bool fHelp)
             "  ,...\n"
             "  ]\n"
             "  \"warnings\": \"...\"                    (string) any network warnings (such as alert messages) \n"
+            "  \"build_type\": \"public|admin\",        (string) release variant (bootstrap tools only in admin)\n"
+            "  \"bootstrap_tools\": \"enabled|disabled\" (string) whether bootstrap RPC/CLI is compiled in\n"
             "}\n"
             "\nExamples:\n"
             + HelpExampleCli("getnetworkinfo", "")
@@ -463,6 +466,14 @@ UniValue getnetworkinfo(const UniValue& params, bool fHelp)
     }
     obj.push_back(Pair("localaddresses", localAddresses));
     obj.push_back(Pair("warnings",       GetWarnings("statusbar")));
+    obj.push_back(Pair("build_variant",  QvncBuildVariantMarker()));
+#if QVNC_ENABLE_BOOTSTRAP_TOOLS
+    obj.push_back(Pair("build_type", "admin"));
+    obj.push_back(Pair("bootstrap_tools", "enabled"));
+#else
+    obj.push_back(Pair("build_type", "public"));
+    obj.push_back(Pair("bootstrap_tools", "disabled"));
+#endif
     return obj;
 }
 

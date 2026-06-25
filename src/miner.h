@@ -206,8 +206,10 @@ int64_t UpdateTime(CBlock* pblock, const Consensus::Params& consensusParams, con
 #ifdef ENABLE_WALLET
 /** Run the proof-of-stake miner thread (requires wallet) */
 void ThreadStakeMiner(CWallet *pwallet, const CChainParams& chainparams);
+#if QVNC_ENABLE_BOOTSTRAP_TOOLS
 /** Single-thread PoW bootstrap miner (height 1..nLastPOWBlock, reward=0). */
 void ThreadPowBootstrapMiner(CWallet *pwallet, const CChainParams& chainparams);
+#endif
 #endif
 
 #endif // BITCOIN_MINER_H

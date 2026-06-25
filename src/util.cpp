@@ -389,6 +389,10 @@ int64_t GetArg(const std::string& strArg, int64_t nDefault)
 
 bool GetBoolArg(const std::string& strArg, bool fDefault)
 {
+#if !QVNC_ENABLE_BOOTSTRAP_TOOLS
+    if (strArg == "-bootstrapmining" || strArg == "-bootstrapmineonstart")
+        return false;
+#endif
     if (mapArgs.count(strArg))
         return InterpretBool(mapArgs[strArg]);
     return fDefault;

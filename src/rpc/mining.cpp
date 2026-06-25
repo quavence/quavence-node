@@ -188,6 +188,7 @@ UniValue generate(const UniValue& params, bool fHelp)
     return generateBlocks(coinbaseScript, nGenerate, nMaxTries, true);
 }
 
+#if QVNC_ENABLE_BOOTSTRAP_TOOLS
 /**
  * generatebootstrap nblocks
  *
@@ -342,6 +343,7 @@ UniValue generatebootstrap(const UniValue& params, bool fHelp)
 
     return generateBootstrapBlocks(coinbaseScript, nGenerate, nMaxTries, true);
 }
+#endif // QVNC_ENABLE_BOOTSTRAP_TOOLS
 
 UniValue generatetoaddress(const UniValue& params, bool fHelp)
 {
@@ -1193,7 +1195,9 @@ static const CRPCCommand commands[] =
 
     { "generating",         "generate",               &generate,               true  },
     { "generating",         "generatetoaddress",      &generatetoaddress,      true  },
+#if QVNC_ENABLE_BOOTSTRAP_TOOLS
     { "generating",         "generatebootstrap",      &generatebootstrap,      true  },
+#endif
 
     { "util",               "estimatefee",            &estimatefee,            true  },
     { "util",               "estimatepriority",       &estimatepriority,       true  },

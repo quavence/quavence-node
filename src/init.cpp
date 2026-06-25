@@ -38,6 +38,7 @@
 #include "utilmoneystr.h"
 #include "utilstrencodings.h"
 #include "validationinterface.h"
+#include "quavence_build.h"
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
 #endif
@@ -486,10 +487,12 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageGroup(_("Staking options:"));
     strUsage += HelpMessageOpt("-staking=<n>", strprintf(_("Enable staking functionality (0-1, default: %u)"), 1));
     strUsage += HelpMessageOpt("-reservebalance=<amount>", _("Keep the specified amount of coins available for spending at all times (default: 0)"));
+#if QVNC_ENABLE_BOOTSTRAP_TOOLS
     strUsage += HelpMessageOpt("-bootstrapmining=<n>",
         _("Enable generatebootstrap RPC (height 1..nLastPOWBlock, default: 0). Does not auto-start mining."));
     strUsage += HelpMessageOpt("-bootstrapmineonstart=<n>",
         _("Auto-start background PoW bootstrap miner at startup (requires -bootstrapmining=1, default: 0)"));
+#endif
 #endif
 
     return strUsage;
@@ -797,6 +800,7 @@ void InitLogging()
 
     LogPrintf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
     LogPrintf("%s version %s\n", PACKAGE_NAME, FormatFullVersion());
+    LogPrintf("Build variant: %s\n", QvncBuildVariantMarker());
 }
 
 /** Initialize bitcoin.
@@ -862,6 +866,16 @@ bool AppInit2(Config& config, boost::thread_group& threadGroup, CScheduler& sche
 
     // ********************************************************* Step 2: parameter interactions
     const CChainParams& chainparams = Params();
+
+#if !QVNC_ENABLE_BOOTSTRAP_TOOLS
+    if (mapArgs.count("-bootstrapmining") || mapArgs.count("-bootstrapmineonstart")) {
+        InitWarning(_("Bootstrap mining is not available in this public build."));
+        mapArgs.erase("-bootstrapmining");
+        mapArgs.erase("-bootstrapmineonstart");
+        mapMultiArgs.erase("-bootstrapmining");
+        mapMultiArgs.erase("-bootstrapmineonstart");
+    }
+#endif
 
     // also see: InitParameterInteraction()
 
@@ -1551,6 +1565,7 @@ bool AppInit2(Config& config, boost::thread_group& threadGroup, CScheduler& sche
     else if (pwalletMain)
         threadGroup.create_thread(boost::bind(&ThreadStakeMiner, pwalletMain, chainparams));
 
+#if QVNC_ENABLE_BOOTSTRAP_TOOLS
     // Optional PoW bootstrap miner autostart. -bootstrapmining only gates RPC.
     // Off by default. Reward is 0 (mainnet), so emission/cap are unaffected.
     if (GetBoolArg("-bootstrapmining", false) && GetBoolArg("-bootstrapmineonstart", false) && pwalletMain) {
@@ -1563,6 +1578,7 @@ bool AppInit2(Config& config, boost::thread_group& threadGroup, CScheduler& sche
                       chainActive.Height(), chainparams.GetConsensus().nLastPOWBlock);
         }
     }
+#endif
 
     // ********************************************************* Step 12: finished
 #endif

@@ -24,6 +24,7 @@ BITCOIN_DAEMON_NAME=quavenced
 BITCOIN_GUI_NAME=quavence-qt
 BITCOIN_CLI_NAME=quavence-cli
 BITCOIN_TX_NAME=quavence-tx
+is_release_build=_CLIENT_VERSION_IS_RELEASE
 
 dnl Unless the user specified ARFLAGS, force it to be cr
 AC_ARG_VAR(ARFLAGS, [Flags for the archiver, defaults to <cr> if not set])
@@ -126,6 +127,12 @@ AC_ARG_ENABLE([wallet],
   [disable wallet (enabled by default)])],
   [enable_wallet=$enableval],
   [enable_wallet=auto])
+
+AC_ARG_ENABLE([bootstrap-tools],
+  [AS_HELP_STRING([--enable-bootstrap-tools],
+  [compile bootstrap mining/RPC tools (admin build; default is no)])],
+  [enable_bootstrap_tools=$enableval],
+  [enable_bootstrap_tools=no])
 
 AC_ARG_WITH([miniupnpc],
   [AS_HELP_STRING([--with-miniupnpc],
@@ -1545,6 +1552,21 @@ else
   AC_MSG_RESULT(no)
 fi
 
+dnl bootstrap tools (admin-only; omitted from public releases)
+AC_MSG_CHECKING([whether to enable bootstrap tools])
+if test x$enable_bootstrap_tools = xyes; then
+  if test x$is_release_build = xtrue; then
+    AC_MSG_ERROR([Bootstrap tools cannot be enabled when CLIENT_VERSION_IS_RELEASE is true. Public release binaries must be configured without --enable-bootstrap-tools.])
+  fi
+  AC_MSG_RESULT(yes)
+  AC_DEFINE_UNQUOTED([QVNC_ENABLE_BOOTSTRAP_TOOLS],[1],[Define to 1 to expose bootstrap RPC and CLI options])
+else
+  AC_MSG_RESULT(no)
+  enable_bootstrap_tools=no
+  AC_DEFINE_UNQUOTED([QVNC_ENABLE_BOOTSTRAP_TOOLS],[0],[Define to 1 to expose bootstrap RPC and CLI options])
+fi
+AC_SUBST(ENABLE_BOOTSTRAP_TOOLS, $enable_bootstrap_tools)
+
 dnl enable upnp support
 AC_MSG_CHECKING([whether to build with support for UPnP])
 if test x$have_miniupnpc = xno; then
@@ -1648,6 +1670,7 @@ AM_CONDITIONAL([BUILD_DARWIN], [test x$BUILD_OS = xdarwin])
 AM_CONDITIONAL([TARGET_LINUX], [test x$TARGET_OS = xlinux])
 AM_CONDITIONAL([TARGET_WINDOWS], [test x$TARGET_OS = xwindows])
 AM_CONDITIONAL([ENABLE_WALLET],[test x$enable_wallet = xyes])
+AM_CONDITIONAL([ENABLE_BOOTSTRAP_TOOLS],[test x$enable_bootstrap_tools = xyes])
 AM_CONDITIONAL([ENABLE_TESTS],[test x$BUILD_TEST = xyes])
 AM_CONDITIONAL([ENABLE_QT],[test x$bitcoin_enable_qt = xyes])
 AM_CONDITIONAL([ENABLE_QT_TESTS],[test x$BUILD_TEST_QT = xyes])
@@ -1777,6 +1800,7 @@ AC_OUTPUT
 echo
 echo "Options used to compile and link:"
 echo "  with wallet   = $enable_wallet"
+echo "  bootstrap tools = $enable_bootstrap_tools"
 echo "  with gui / qt = $bitcoin_enable_qt"
 if test x$bitcoin_enable_qt != xno; then
     echo "    with qr     = $use_qr"

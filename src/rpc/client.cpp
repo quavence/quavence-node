@@ -29,8 +29,10 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getaddednodeinfo", 0 },
     { "generate", 0 },
     { "generate", 1 },
+#if QVNC_ENABLE_BOOTSTRAP_TOOLS
     { "generatebootstrap", 0 },
     { "generatebootstrap", 1 },
+#endif
     { "generatetoaddress", 0 },
     { "generatetoaddress", 2 },
     { "getnetworkhashps", 0 },

@@ -576,6 +576,7 @@ void IncrementExtraNonce(CBlock* pblock, const CBlockIndex* pindexPrev, unsigned
 }
 
 #ifdef ENABLE_WALLET
+#if QVNC_ENABLE_BOOTSTRAP_TOOLS
 /**
  * Background PoW bootstrap miner.
  *
@@ -681,6 +682,7 @@ void ThreadPowBootstrapMiner(CWallet *pwallet, const CChainParams& chainparams)
         }
     }
 }
+#endif // QVNC_ENABLE_BOOTSTRAP_TOOLS
 
 void ThreadStakeMiner(CWallet *pwallet, const CChainParams& chainparams)
 {
