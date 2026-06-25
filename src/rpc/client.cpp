@@ -29,6 +29,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getaddednodeinfo", 0 },
     { "generate", 0 },
     { "generate", 1 },
+    { "generatebootstrap", 0 },
+    { "generatebootstrap", 1 },
     { "generatetoaddress", 0 },
     { "generatetoaddress", 2 },
     { "getnetworkhashps", 0 },

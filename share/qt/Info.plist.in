@@ -29,16 +29,16 @@
   <string>????</string>
 
   <key>CFBundleExecutable</key>
-  <string>Blackmore-Qt</string>
+  <string>@BITCOIN_GUI_NAME@</string>
 
   <key>CFBundleName</key>
-  <string>Blackmore-Qt</string>
+  <string>@BITCOIN_GUI_NAME@</string>
 
   <key>LSHasLocalizedDisplayName</key>
   <true/>
 
   <key>CFBundleIdentifier</key>
-  <string>org.blackcoin.Blackmore-Qt</string>
+  <string>org.quavence.Quavence-Qt</string>
 
   <key>CFBundleURLTypes</key>
   <array>
@@ -46,10 +46,10 @@
       <key>CFBundleTypeRole</key>
       <string>Editor</string>
       <key>CFBundleURLName</key>
-      <string>org.blackcoin.BlackcoinPayment</string>
+      <string>org.quavence.QuavencePayment</string>
       <key>CFBundleURLSchemes</key>
       <array>
-        <string>bitcoin</string>
+        <string>quavence</string>
       </array>
     </dict>
   </array>
@@ -58,9 +58,9 @@
   <array>
     <dict>
       <key>UTTypeIdentifier</key>
-      <string>org.blackcoin.paymentrequest</string>
+      <string>org.quavence.paymentrequest</string>
       <key>UTTypeDescription</key>
-      <string>Bitcoin payment request</string>
+      <string>Quavence payment request</string>
       <key>UTTypeConformsTo</key>
       <array>
         <string>public.data</string>
@@ -68,10 +68,10 @@
       <key>UTTypeTagSpecification</key>
       <dict>
         <key>public.mime-type</key>
-        <string>application/x-blackcoin-payment-request</string>
+        <string>application/x-quavence-payment-request</string>
         <key>public.filename-extension</key>
         <array>
-          <string>bitcoinpaymentrequest</string>
+          <string>quavencepaymentrequest</string>
         </array>
       </dict>
     </dict>
@@ -84,7 +84,7 @@
       <string>Editor</string>
       <key>LSItemContentTypes</key>
       <array>
-        <string>org.blackcoin.paymentrequest</string>
+        <string>org.quavence.paymentrequest</string>
       </array>
       <key>LSHandlerRank</key>
       <string>Owner</string>

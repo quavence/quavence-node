@@ -54,6 +54,10 @@ struct Params {
     BIP9Deployment vDeployments[MAX_VERSION_BITS_DEPLOYMENTS];
     /** Proof of work parameters */
     uint256 powLimit;
+    /** Larger (easier) PoW ceiling for heights 0..nLastPOWBlock when bootstrap is enabled; ignored if nPowBootstrapCompactTarget==0. */
+    uint256 powLimitBootstrap;
+    /** When non-zero, PoW heights 1..nLastPOWBlock use this fixed difficulty (easier bootstrap); PoS unaffected. Mainnet only. */
+    uint32_t nPowBootstrapCompactTarget;
     uint256 posLimit;
     uint256 posLimitV2;
     bool fPowAllowMinDifficultyBlocks;

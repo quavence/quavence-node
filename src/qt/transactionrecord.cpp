@@ -40,7 +40,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
     CAmount nCredit = wtx.GetCredit(ISMINE_ALL);
     CAmount nDebit = wtx.GetDebit(ISMINE_ALL);
     CAmount nNet = nCredit - nDebit;
-    uint256 hash = wtx.GetHash(), hashPrev;
+    uint256 hash = wtx.GetHash();
     std::map<std::string, std::string> mapValue = wtx.mapValue;
 
     if (nNet > 0 || wtx.IsCoinBase() || wtx.IsCoinStake())
@@ -49,50 +49,64 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
         // Credit
         //
 
-        CAmount nReward = -nDebit;
         if (wtx.IsCoinStake())
         {
+            bool involvesWatchAddress = false;
             for (unsigned int j = 0; j < wtx.vout.size(); j++)
-                if (wtx.vout[j].scriptPubKey == wtx.vout[1].scriptPubKey)
-                    nReward += wtx.vout[j].nValue;
-        }
-
-        BOOST_FOREACH(const CTxOut& txout, wtx.vout)
-        {
-            isminetype mine = wallet->IsMine(txout);
-            if(mine)
+            {
+                if (wtx.vout[j].IsEmpty())
+                    continue;
+                isminetype mine = wallet->IsMine(wtx.vout[j]);
+                if (!mine)
+                    continue;
+                if (mine & ISMINE_WATCH_ONLY)
+                    involvesWatchAddress = true;
+            }
+            CAmount nNetReward = wallet->GetCoinStakeCredit(wtx, ISMINE_ALL) - wtx.GetDebit(ISMINE_ALL);
+            if (nNetReward != 0)
             {
                 TransactionRecord sub(hash, nTime);
-                CTxDestination address;
-                sub.idx = parts.size(); // sequence number
-                sub.credit = txout.nValue;
-                sub.involvesWatchAddress = mine & ISMINE_WATCH_ONLY;
-                if (ExtractDestination(txout.scriptPubKey, address) && IsMine(*wallet, address))
-                {
-                    // Received by Bitcoin Address
-                    sub.type = TransactionRecord::RecvWithAddress;
-                    sub.address = EncodeDestination(address);
-                }
-                else
-                {
-                    // Received by IP connection (deprecated features), or a multisignature or other non-simple transaction
-                    sub.type = TransactionRecord::RecvFromOther;
-                    sub.address = mapValue["from"];
-                }
-                if (wtx.IsCoinBase() || wtx.IsCoinStake())
-                {
-                    // Generated
-                    sub.type = TransactionRecord::Generated;
-                }
-                if (wtx.IsCoinStake())
-                {
-                	if (hashPrev == hash)
-                		continue; // last coinstake output
-                	sub.credit = nReward;
-                	hashPrev = hash;
-
-                }
+                sub.idx = parts.size();
+                sub.type = TransactionRecord::Generated;
+                // For coinstake, display only net minted reward in transaction lists:
+                // reward = total credit to wallet - total debit from wallet.
+                // Showing full returned stake output is misleading in UI.
+                sub.credit = nNetReward;
+                sub.involvesWatchAddress = involvesWatchAddress;
                 parts.append(sub);
+            }
+        }
+        else
+        {
+            BOOST_FOREACH(const CTxOut& txout, wtx.vout)
+            {
+                isminetype mine = wallet->IsMine(txout);
+                if(mine)
+                {
+                    TransactionRecord sub(hash, nTime);
+                    CTxDestination address;
+                    sub.idx = parts.size(); // sequence number
+                    sub.credit = txout.nValue;
+                    sub.involvesWatchAddress = mine & ISMINE_WATCH_ONLY;
+                    if (ExtractDestination(txout.scriptPubKey, address) && IsMine(*wallet, address))
+                    {
+                        // Received by Bitcoin Address
+                        sub.type = TransactionRecord::RecvWithAddress;
+                        sub.address = EncodeDestination(address);
+                    }
+                    else
+                    {
+                        // Received by IP connection (deprecated features), or a multisignature or other non-simple transaction
+                        sub.type = TransactionRecord::RecvFromOther;
+                        sub.address = mapValue["from"];
+                    }
+                    if (wtx.IsCoinBase())
+                    {
+                        // Generated
+                        sub.type = TransactionRecord::Generated;
+                    }
+                    parts.append(sub);
+                }
             }
         }
     }

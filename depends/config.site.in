@@ -113,3 +113,12 @@ fi
 if test -n "@LDFLAGS@"; then
   LDFLAGS="@LDFLAGS@ ${LDFLAGS}"
 fi
+
+# secp256k1 gen_context must be a native (Linux) build tool. WSL binfmt can run
+# mingw PE binaries during configure, so autotools may think we are not
+# cross-compiling and set CC_FOR_BUILD to the mingw compiler.
+if test "@HOST@" = "x86_64-w64-mingw32"; then
+  CC_FOR_BUILD="${CC_FOR_BUILD:-gcc}"
+  CXX_FOR_BUILD="${CXX_FOR_BUILD:-g++}"
+  export CC_FOR_BUILD CXX_FOR_BUILD
+fi

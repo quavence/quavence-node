@@ -5,6 +5,7 @@
 #include "walletmodel.h"
 
 #include "addresstablemodel.h"
+#include "coincontrol.h"
 #include "guiconstants.h"
 #include "guiutil.h"
 #include "paymentserver.h"
@@ -13,6 +14,9 @@
 #include "dstencode.h"
 #include "keystore.h"
 #include "main.h"
+#include "policy/policy.h"
+#include "script/script.h"
+#include "script/standard.h"
 #include "sync.h"
 #include "ui_interface.h"
 #include "wallet/wallet.h"
@@ -20,11 +24,73 @@
 
 #include <stdint.h>
 
+#include <limits>
+
 #include <QDebug>
 #include <QSet>
 #include <QTimer>
 
 #include <boost/foreach.hpp>
+
+namespace {
+
+/** Dummy P2PKH for fee/size probing only — not spendable wallet keys (same serialized size). */
+static CScript DummyStakeSplitP2pkh(int index)
+{
+    std::vector<unsigned char> vch(20, 0x5a);
+    for (int b = 0; b < 4; ++b)
+        vch[16 + b] ^= static_cast<unsigned char>((index >> (b * 8)) & 0xff);
+    return CScript() << OP_DUP << OP_HASH160 << vch << OP_EQUALVERIFY << OP_CHECKSIG;
+}
+
+static void BuildDummyRecipients(int nOutputs, CAmount amountEach, std::vector<CRecipient>& vecSend)
+{
+    vecSend.clear();
+    vecSend.reserve(nOutputs);
+    for (int i = 0; i < nOutputs; ++i) {
+        CRecipient recipient = { DummyStakeSplitP2pkh(i), amountEach, false };
+        vecSend.push_back(recipient);
+    }
+}
+
+static bool ResolveSingleInputAddress(const CWallet* wallet, const CWalletTx& tx, CTxDestination& destOut, std::string& err)
+{
+    bool hasDest = false;
+    BOOST_FOREACH(const CTxIn& in, tx.vin) {
+        std::map<uint256, CWalletTx>::const_iterator it = wallet->mapWallet.find(in.prevout.hash);
+        if (it == wallet->mapWallet.end() || in.prevout.n >= it->second.vout.size()) {
+            err = "Could not resolve source input for same-address split.";
+            return false;
+        }
+        CTxDestination dest;
+        if (!ExtractDestination(it->second.vout[in.prevout.n].scriptPubKey, dest)) {
+            err = "Same-address split requires standard address inputs.";
+            return false;
+        }
+        if (!hasDest) {
+            destOut = dest;
+            hasDest = true;
+        } else if (!(dest == destOut)) {
+            err = "Same address split requires selected inputs from one address.";
+            return false;
+        }
+    }
+    if (!hasDest) {
+        err = "No source inputs available for same-address split.";
+        return false;
+    }
+    return true;
+}
+
+static void SelectExactInputs(const CWalletTx& tx, CCoinControl& coinControl)
+{
+    coinControl.UnSelectAll();
+    BOOST_FOREACH(const CTxIn& in, tx.vin)
+        coinControl.Select(in.prevout);
+    coinControl.fAllowOtherInputs = false;
+}
+
+} // namespace
 
 WalletModel::WalletModel(const PlatformStyle *platformStyle, CWallet *wallet, OptionsModel *optionsModel, QObject *parent) :
     QObject(parent), wallet(wallet), optionsModel(optionsModel), addressTableModel(0),
@@ -82,6 +148,28 @@ CAmount WalletModel::getBalance(const CCoinControl *coinControl) const
 CAmount WalletModel::getStake() const
 {
     return wallet->GetStake();
+}
+
+CAmount WalletModel::getStakeRewards() const
+{
+    CAmount totalRewards = 0;
+    LOCK2(cs_main, wallet->cs_wallet);
+
+    for (std::map<uint256, CWalletTx>::const_iterator it = wallet->mapWallet.begin();
+         it != wallet->mapWallet.end(); ++it) {
+        const CWalletTx& wtx = it->second;
+        if (!wtx.IsCoinStake())
+            continue;
+        if (!wtx.IsInMainChain())
+            continue;
+
+        const CAmount netReward = wtx.GetCredit(ISMINE_ALL) - wtx.GetDebit(ISMINE_ALL);
+        // Display-only cumulative reward metric: never count returned principal.
+        if (netReward > 0)
+            totalRewards += netReward;
+    }
+
+    return totalRewards;
 }
 
 CAmount WalletModel::getWatchStake() const
@@ -323,6 +411,250 @@ WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransact
     }
 
     return SendCoinsReturn(OK);
+}
+
+WalletModel::SendCoinsReturn WalletModel::estimateStakeSplitFees(
+    int nOutputs, CAmount amountEach,
+    const CCoinControl *coinControl,
+    bool sameSourceAddressMode,
+    CAmount &feeRetOut,
+    unsigned int &txSizeRetOut,
+    QString &errorReasonOut,
+    QString &resolvedDestinationOut)
+{
+    feeRetOut = 0;
+    txSizeRetOut = 0;
+    errorReasonOut.clear();
+    resolvedDestinationOut.clear();
+
+    if (nOutputs < 1 || amountEach <= 0)
+        return InvalidAmount;
+
+    if (amountEach > std::numeric_limits<CAmount>::max() / static_cast<CAmount>(nOutputs))
+        return InvalidAmount;
+
+    const CAmount total = amountEach * static_cast<CAmount>(nOutputs);
+
+    const CAmount nBalance = getBalance(coinControl);
+    if (total > nBalance)
+        return AmountExceedsBalance;
+
+    {
+        LOCK2(cs_main, wallet->cs_wallet);
+        CCoinControl probeControl;
+        if (coinControl)
+            probeControl = *coinControl;
+        if (!(coinControl && coinControl->HasSelected()))
+            probeControl.fAllowOtherInputs = true;
+        probeControl.destChange = CKeyID(uint160S("0000000000000000000000000000000000000001"));
+
+        CWalletTx wProbe;
+        CReserveKey rkProbe(wallet);
+        CAmount nProbeFeeRequired = 0;
+        int nProbeChangePosRet = -1;
+        std::string strProbeFailReason;
+        std::vector<CRecipient> vecProbeSend;
+        BuildDummyRecipients(nOutputs, amountEach, vecProbeSend);
+        bool fProbeCreated = wallet->CreateTransaction(vecProbeSend, wProbe, rkProbe,
+            nProbeFeeRequired, nProbeChangePosRet, strProbeFailReason, &probeControl, false);
+
+        if (!fProbeCreated && (total + nProbeFeeRequired) > nBalance) {
+            errorReasonOut = tr("Amount plus fee exceeds balance.");
+            return AmountWithFeeExceedsBalance;
+        }
+        if (!fProbeCreated) {
+            errorReasonOut = QString::fromStdString(strProbeFailReason);
+            return TransactionCreationFailed;
+        }
+
+        CTxDestination sourceDest;
+        if (sameSourceAddressMode) {
+            std::string resolveErr;
+            if (!ResolveSingleInputAddress(wallet, wProbe, sourceDest, resolveErr)) {
+                errorReasonOut = tr(resolveErr.c_str());
+                return TransactionCreationFailed;
+            }
+        }
+
+        CCoinControl estimateControl = probeControl;
+        SelectExactInputs(wProbe, estimateControl);
+        if (sameSourceAddressMode)
+            estimateControl.destChange = sourceDest;
+        else
+            estimateControl.destChange = CKeyID(uint160S("0000000000000000000000000000000000000001"));
+
+        std::vector<CRecipient> vecSend;
+        vecSend.reserve(nOutputs);
+        for (int i = 0; i < nOutputs; ++i) {
+            CScript outScript = sameSourceAddressMode ? GetScriptForDestination(sourceDest) : DummyStakeSplitP2pkh(i);
+            CRecipient recipient = { outScript, amountEach, false };
+            vecSend.push_back(recipient);
+        }
+
+        CWalletTx wtemp;
+        CReserveKey rkChange(wallet);
+        CAmount nFeeRequired = 0;
+        int nChangePosRet = -1;
+        std::string strFailReason;
+        bool fCreated = wallet->CreateTransaction(vecSend, wtemp, rkChange,
+            nFeeRequired, nChangePosRet, strFailReason, &estimateControl, false);
+
+        if (!fCreated && (total + nFeeRequired) > nBalance) {
+            errorReasonOut = tr("Amount plus fee exceeds balance.");
+            return AmountWithFeeExceedsBalance;
+        }
+        if (!fCreated) {
+            errorReasonOut = QString::fromStdString(strFailReason);
+            return TransactionCreationFailed;
+        }
+        if (nFeeRequired > maxTxFee) {
+            errorReasonOut = tr("Calculated fee is higher than configured maximum.");
+            return AbsurdFee;
+        }
+
+        const unsigned int nBytes =
+            ::GetSerializeSize(*(CTransaction*)&wtemp, SER_NETWORK, PROTOCOL_VERSION);
+        if (nBytes >= MAX_STANDARD_TX_SIZE) {
+            errorReasonOut = tr("Transaction would exceed the maximum size (%1 bytes). Use fewer outputs.")
+                .arg(MAX_STANDARD_TX_SIZE);
+            return TransactionCreationFailed;
+        }
+
+        feeRetOut = nFeeRequired;
+        txSizeRetOut = nBytes;
+        if (sameSourceAddressMode)
+            resolvedDestinationOut = QString::fromStdString(EncodeDestination(sourceDest));
+        else
+            resolvedDestinationOut = tr("new internal wallet addresses");
+    }
+    return SendCoinsReturn(OK);
+}
+
+WalletModel::SendCoinsReturn WalletModel::commitStakeSplit(
+    int nOutputs, CAmount amountEach,
+    const CCoinControl *coinControl,
+    bool sameSourceAddressMode,
+    QString &errorReasonOut,
+    QString &resolvedDestinationOut)
+{
+    errorReasonOut.clear();
+    resolvedDestinationOut.clear();
+
+    if (nOutputs < 1 || amountEach <= 0)
+        return InvalidAmount;
+
+    if (amountEach > std::numeric_limits<CAmount>::max() / static_cast<CAmount>(nOutputs))
+        return InvalidAmount;
+
+    const CAmount total = amountEach * static_cast<CAmount>(nOutputs);
+
+    const CAmount nBalance = getBalance(coinControl);
+    if (total > nBalance)
+        return AmountExceedsBalance;
+
+    SendCoinsReturn result(OK);
+
+    {
+        LOCK2(cs_main, wallet->cs_wallet);
+
+        std::vector<CReserveKey> outputRK;
+        std::vector<CPubKey> outPubkeys;
+        std::vector<CRecipient> vecSend;
+        vecSend.reserve(static_cast<size_t>(nOutputs));
+
+        CCoinControl commitControl;
+        if (coinControl)
+            commitControl = *coinControl;
+        if (!(coinControl && coinControl->HasSelected()))
+            commitControl.fAllowOtherInputs = true;
+
+        CTxDestination sourceDest;
+        if (sameSourceAddressMode) {
+            CWalletTx wProbe;
+            CReserveKey rkProbe(wallet);
+            CAmount nProbeFeeRequired = 0;
+            int nProbeChangePosRet = -1;
+            std::string strProbeFailReason;
+            std::vector<CRecipient> vecProbeSend;
+            BuildDummyRecipients(nOutputs, amountEach, vecProbeSend);
+            bool fProbeCreated = wallet->CreateTransaction(vecProbeSend, wProbe, rkProbe,
+                nProbeFeeRequired, nProbeChangePosRet, strProbeFailReason, &commitControl);
+            if (!fProbeCreated) {
+                errorReasonOut = QString::fromStdString(strProbeFailReason);
+                return TransactionCreationFailed;
+            }
+            std::string resolveErr;
+            if (!ResolveSingleInputAddress(wallet, wProbe, sourceDest, resolveErr)) {
+                errorReasonOut = tr(resolveErr.c_str());
+                return TransactionCreationFailed;
+            }
+            SelectExactInputs(wProbe, commitControl);
+            commitControl.destChange = sourceDest;
+            for (int i = 0; i < nOutputs; ++i) {
+                CRecipient recipient = { GetScriptForDestination(sourceDest), amountEach, false };
+                vecSend.push_back(recipient);
+            }
+            resolvedDestinationOut = QString::fromStdString(EncodeDestination(sourceDest));
+        } else {
+            outputRK.reserve(static_cast<size_t>(nOutputs));
+            outPubkeys.reserve(static_cast<size_t>(nOutputs));
+            for (int i = 0; i < nOutputs; ++i) {
+                outputRK.emplace_back(wallet);
+                CPubKey pk;
+                if (!outputRK.back().GetReservedKey(pk)) {
+                    errorReasonOut = tr("Could not reserve a key for split output %1/%2.")
+                        .arg(i + 1).arg(nOutputs);
+                    return TransactionCreationFailed;
+                }
+                outPubkeys.push_back(pk);
+                CRecipient recipient = { GetScriptForDestination(pk.GetID()), amountEach, false };
+                vecSend.push_back(recipient);
+            }
+            resolvedDestinationOut = tr("new internal wallet addresses");
+        }
+
+        CReserveKey rkChange(wallet);
+        CWalletTx wtxNew;
+        CAmount nFeeRequired = 0;
+        int nChangePosRet = -1;
+        std::string strFailReason;
+        bool fCreated = wallet->CreateTransaction(vecSend, wtxNew, rkChange,
+            nFeeRequired, nChangePosRet, strFailReason, &commitControl);
+
+        if (!fCreated && (total + nFeeRequired) > nBalance)
+            result = AmountWithFeeExceedsBalance;
+        else if (!fCreated) {
+            errorReasonOut = QString::fromStdString(strFailReason);
+            result = TransactionCreationFailed;
+        } else if (nFeeRequired > maxTxFee) {
+            for (auto& rk : outputRK) rk.ReturnKey();
+            result = AbsurdFee;
+        } else {
+            if (!wallet->CommitTransaction(wtxNew, rkChange)) {
+                for (auto& rk : outputRK) rk.ReturnKey();
+                errorReasonOut = tr("Committing split transaction failed.");
+                result = TransactionCommitFailed;
+            } else {
+                for (auto& rk : outputRK) rk.KeepKey();
+                if (!sameSourceAddressMode) {
+                    for (size_t idx = 0; idx < outPubkeys.size(); ++idx) {
+                        const std::string label =
+                            QString("split-stake-%1").arg(static_cast<int>(idx + 1)).toStdString();
+                        wallet->SetAddressBook(outPubkeys[idx].GetID(), label, "receive");
+                    }
+                }
+            }
+        }
+    }
+
+    if (result.status == OK)
+        checkBalanceChanged();
+    else if (result.status == AmountWithFeeExceedsBalance && errorReasonOut.isEmpty())
+        errorReasonOut = tr("Amount plus fee exceeds balance.");
+    else if (result.status == AbsurdFee && errorReasonOut.isEmpty())
+        errorReasonOut = tr("Calculated fee is higher than configured maximum.");
+
+    return result;
 }
 
 WalletModel::SendCoinsReturn WalletModel::sendCoins(WalletModelTransaction &transaction)
@@ -616,6 +948,12 @@ bool WalletModel::isSpent(const COutPoint& outpoint) const
 {
     LOCK2(cs_main, wallet->cs_wallet);
     return wallet->IsSpent(outpoint.hash, outpoint.n);
+}
+
+void WalletModel::listMatureStakingCoins(std::vector<COutput>& vCoinsOut) const
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    wallet->AvailableCoinsForStaking(vCoinsOut);
 }
 
 // AvailableCoins + LockedCoins grouped by wallet address (put change in one group with wallet address)

@@ -30,3 +30,8 @@ example, to run just the getarg_tests verbosely:
 
 Run `test_blackmore --help` for the full list.
 
+## Quavence / subsidy schedule
+
+- C++ tests in `subsidy_schedule_tests.cpp` validate `consensus/subsidy_schedule.h` (total PoS cap, contiguous heights, `GetProofOfStakeSubsidy` boundaries).
+- Regenerate the header from specs: `python3 /path/to/coin-spec/tools/gen_emission.py`
+- JSON-only checks (no Boost): `python3 -m unittest /path/to/coin-spec/tools/test_emission.py -v`

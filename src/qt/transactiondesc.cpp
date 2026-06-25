@@ -147,6 +147,21 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, TransactionReco
         // Credit
         //
         strHTML += "<b>" + tr("Credit") + ":</b> " + BitcoinUnits::formatHtmlWithUnit(unit, nNet) + "<br>";
+        if (wtx.IsCoinStake())
+        {
+            CAmount stakedInput = nDebit;
+            CAmount returnedStakeOutput = 0;
+            BOOST_FOREACH(const CTxOut& txout, wtx.vout)
+            {
+                if (txout.IsEmpty())
+                    continue;
+                if (wallet->IsMine(txout))
+                    returnedStakeOutput += txout.nValue;
+            }
+            strHTML += "<b>" + tr("Staked input") + ":</b> " + BitcoinUnits::formatHtmlWithUnit(unit, stakedInput) + "<br>";
+            strHTML += "<b>" + tr("Returned stake output") + ":</b> " + BitcoinUnits::formatHtmlWithUnit(unit, returnedStakeOutput) + "<br>";
+            strHTML += "<b>" + tr("Net stake reward") + ":</b> " + BitcoinUnits::formatHtmlWithUnit(unit, nNet, true) + "<br>";
+        }
     }
     else
     {
@@ -241,6 +256,12 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, TransactionReco
 
     strHTML += "<b>" + tr("Transaction ID") + ":</b> " + rec->getTxID() + "<br>";
     strHTML += "<b>" + tr("Output index") + ":</b> " + QString::number(rec->getOutputIndex()) + "<br>";
+    if (!wtx.hashBlock.IsNull())
+    {
+        BlockMap::const_iterator bi = mapBlockIndex.find(wtx.hashBlock);
+        if (bi != mapBlockIndex.end() && bi->second)
+            strHTML += "<b>" + tr("Block height") + ":</b> " + QString::number(bi->second->nHeight) + "<br>";
+    }
 
     // Message from normal blackcoin:URI (blackcoin:123...?message=example)
     for (const std::pair<std::string, std::string> &r : wtx.vOrderForm)
@@ -266,7 +287,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, TransactionReco
 
     if (wtx.IsCoinBase())
     {
-        quint32 numBlocksToMaturity = Params().GetConsensus().nCoinbaseMaturity +  1;
+        quint32 numBlocksToMaturity = Params().GetConsensus().nCoinbaseMaturity;
         strHTML += "<br>" + tr("Generated coins must mature %1 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to \"not accepted\" and it won't be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.").arg(QString::number(numBlocksToMaturity)) + "<br>";
     }
 

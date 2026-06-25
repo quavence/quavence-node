@@ -16,6 +16,7 @@
 #include "checkpoints.h"
 #include "checkqueue.h"
 #include "consensus/consensus.h"
+#include "consensus/subsidy_schedule.h"
 #include "consensus/merkle.h"
 #include "consensus/validation.h"
 #include "hash.h"
@@ -45,7 +46,9 @@
 #include "validationinterface.h"
 #include "versionbits.h"
 #include "key.h"
+#ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
+#endif
 
 #include <atomic>
 #include <sstream>
@@ -1639,6 +1642,17 @@ bool GetTransaction(const uint256 &hash, CTransaction &txOut, const Consensus::P
 
     LOCK(cs_main);
 
+    // Genesis coinbase is not in the txindex and the slow lookup below skipped height 0
+    // (nHeight > 0). PoS needs this tx for the first stake from the premine output.
+    {
+        const CBlock& genesisBlock = Params().GenesisBlock();
+        if (!genesisBlock.vtx.empty() && hash == genesisBlock.vtx[0].GetHash()) {
+            txOut = genesisBlock.vtx[0];
+            hashBlock = genesisBlock.GetHash();
+            return true;
+        }
+    }
+
     std::shared_ptr<const CTransaction> ptx = mempool.get(hash);
     if (ptx)
     {
@@ -1675,7 +1689,7 @@ bool GetTransaction(const uint256 &hash, CTransaction &txOut, const Consensus::P
             if (coins)
                 nHeight = coins->nHeight;
         }
-        if (nHeight > 0)
+        if (nHeight >= 0)
             pindexSlow = chainActive[nHeight];
     }
 
@@ -1764,12 +1778,22 @@ bool ReadBlockFromDisk(CBlock& block, const CBlockIndex* pindex, const Consensus
 
 CAmount GetProofOfWorkSubsidy()
 {
+    // DSN (this repository's main chain): premine is entirely in genesis; PoW period is fee-only.
+    if (Params().NetworkIDString() == std::string("main"))
+        return 0;
     return 10000 * COIN;
 }
 
-CAmount GetProofOfStakeSubsidy()
+CAmount GetProofOfStakeSubsidy(int nHeight)
 {
-    return COIN * 3 / 2;
+    if (nHeight < SUBSIDY_FIRST_HEIGHT)
+        return 0;
+    for (size_t i = 0; i < SUBSIDY_ERA_COUNT; i++) {
+        const SubsidyEraRow& row = SUBSIDY_ERAS[i];
+        if (nHeight >= row.eraStartHeight && nHeight <= row.eraEndHeight)
+            return row.rewardPerBlock;
+    }
+    return 0;
 }
 
 bool IsInitialBlockDownload()
@@ -1922,10 +1946,11 @@ void static InvalidChainFound(CBlockIndex* pindexNew)
       log(pindexNew->nChainWork.getdouble())/log(2.0), DateTimeStrFormat("%Y-%m-%d %H:%M:%S",
       pindexNew->GetBlockTime()));
     CBlockIndex *tip = chainActive.Tip();
-    assert (tip);
-    LogPrintf("%s:  current best=%s  height=%d  log2_work=%.8g  date=%s\n", __func__,
-      tip->GetBlockHash().ToString(), chainActive.Height(), log(tip->nChainWork.getdouble())/log(2.0),
-      DateTimeStrFormat("%Y-%m-%d %H:%M:%S", tip->GetBlockTime()));
+    if (tip) {
+        LogPrintf("%s:  current best=%s  height=%d  log2_work=%.8g  date=%s\n", __func__,
+          tip->GetBlockHash().ToString(), chainActive.Height(), log(tip->nChainWork.getdouble())/log(2.0),
+          DateTimeStrFormat("%Y-%m-%d %H:%M:%S", tip->GetBlockTime()));
+    }
     CheckForkWarningConditions();
 }
 
@@ -1963,7 +1988,10 @@ void UpdateCoins(const CTransaction& tx, CCoinsViewCache& inputs, CTxUndo &txund
             // mark an outpoint spent, and construct undo information
             txundo.vprevout.push_back(CTxInUndo(coins->vout[nPos]));
             coins->Spend(nPos);
-            if (coins->vout.size() == 0) {
+            // Use IsPruned(), not vout.size()==0: PoS coinstake/coinbase can keep null
+            // placeholder outputs (e.g. empty vout[0]) after the last spendable output
+            // is spent, so undo must still record height/coinbase/coinstake metadata.
+            if (coins->IsPruned()) {
                 CTxInUndo& undo = txundo.vprevout.back();
                 undo.nHeight = coins->nHeight;
                 undo.fCoinBase = coins->fCoinBase;
@@ -2225,8 +2253,15 @@ static bool ApplyTxInUndo(const CTxInUndo& undo, CCoinsViewCache& view, const CO
         coins->nVersion = undo.nVersion;
         coins->nTime = undo.nTime;
     } else {
-        if (coins->IsPruned())
-            fClean = fClean && error("%s: undo data adding output to missing transaction", __func__);
+        if (coins->IsPruned()) {
+            // Legacy on-disk undo may lack nHeight/fCoinStake (UpdateCoins used vout.size()==0).
+            // Do not restore only undo.txout here: CCoins metadata would stay wrong (see report).
+            return error(
+                "%s: undo data adding output to missing transaction "
+                "(prevout=%s:%u undo.nHeight=%u undo.fCoinBase=%d undo.fCoinStake=%d coins.IsPruned=%d)",
+                __func__, out.hash.ToString(), out.n, undo.nHeight, undo.fCoinBase, undo.fCoinStake,
+                coins->IsPruned());
+        }
     }
     if (coins->IsAvailable(out.n))
         fClean = fClean && error("%s: undo data overwriting existing output", __func__);
@@ -2407,9 +2442,14 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     uint256 hashPrevBlock = pindex->pprev == NULL ? uint256() : pindex->pprev->GetBlockHash();
     assert(hashPrevBlock == view.GetBestBlock());
 
-    // Special case for the genesis block, skipping connection of its transactions
-    // (its coinbase is unspendable)
+    // Genesis: legacy Blackcoin skipped vtx (unspendable coinbase). Quavence mainnet
+    // premine lives in genesis coinbase and must be added to the UTXO set for PoS block 1.
     if (block.GetHash() == chainparams.GetConsensus().hashGenesisBlock) {
+        for (unsigned int i = 0; i < block.vtx.size(); i++) {
+            const CTransaction& tx = block.vtx[i];
+            CTxUndo undoDummy;
+            UpdateCoins(tx, view, undoDummy, pindex->nHeight);
+        }
         if (!fJustCheck)
             view.SetBestBlock(pindex->GetBlockHash());
         return true;
@@ -2596,7 +2636,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     }
 
     if (block.IsProofOfStake() && chainparams.GetConsensus().IsProtocolV3(block.GetBlockTime())) {
-            CAmount blockReward = nFees + GetProofOfStakeSubsidy();
+            CAmount blockReward = nFees + GetProofOfStakeSubsidy(pindex->nHeight);
             if (nActualStakeReward > blockReward)
                 return state.DoS(100,
                                  error("ConnectBlock(): coinstake pays too much (actual=%d vs limit=%d)",
@@ -3514,7 +3554,11 @@ static bool CheckBlockSignature(const CBlock& block)
 
 bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW)
 {
-    // Check block version
+    // Genesis is committed in chainparams (nonce satisfies scrypt target); skip header rules here.
+    if (block.GetHash() == consensusParams.hashGenesisBlock)
+        return true;
+
+    // Check block version (genesis may use nVersion=1; header rules apply from block 1 onward)
     if (block.nVersion < 7 && consensusParams.IsProtocolV2(block.GetBlockTime()))
         return state.DoS(100, false, REJECT_OBSOLETE, "bad-version", false, strprintf("rejected nVersion=%d block", block.nVersion));
 
@@ -3708,6 +3752,7 @@ bool ContextualCheckBlock(const CBlock& block, CValidationState& state, CBlockIn
     return true;
 }
 
+#ifdef ENABLE_WALLET
 bool CheckStake(CBlock* pblock, CWallet& wallet, const CChainParams& chainparams)
 {
     uint256 hashBlock = pblock->GetHash();
@@ -3838,6 +3883,7 @@ bool SignBlock(CBlock& block, CWallet& wallet, int64_t& nFees)
 
     return false;
 }
+#endif // ENABLE_WALLET
 
 // Blackcoin: GetMinFee
 CAmount GetMinFee(const CTransaction& tx, unsigned int nTimeTx)

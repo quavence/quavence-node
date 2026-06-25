@@ -135,9 +135,17 @@ UniValue importprivkey(const UniValue& params, bool fHelp)
         pwalletMain->MarkDirty();
         pwalletMain->SetAddressBook(vchAddress, strLabel, "receive");
 
-        // Don't throw error in case a key is already there
-        if (pwalletMain->HaveKey(vchAddress))
+        // If the key already exists, still allow a full rescan from genesis
+        // so wallets that missed genesis premine recognition can recover.
+        if (pwalletMain->HaveKey(vchAddress)) {
+            if (fRescan) {
+                pwalletMain->nTimeFirstKey = 1; // 0 would be considered 'no value'
+                pwalletMain->ScanForWalletTransactions(chainActive.Genesis(), true);
+                pwalletMain->AddGenesisIfInvolvingMe(true);
+                pwalletMain->ReacceptWalletTransactions();
+            }
             return NullUniValue;
+        }
 
         pwalletMain->mapKeyMetadata[vchAddress].nCreateTime = 1;
 
@@ -149,6 +157,8 @@ UniValue importprivkey(const UniValue& params, bool fHelp)
 
         if (fRescan) {
             pwalletMain->ScanForWalletTransactions(chainActive.Genesis(), true);
+            pwalletMain->AddGenesisIfInvolvingMe(true);
+            pwalletMain->ReacceptWalletTransactions();
         }
     }
 
@@ -457,84 +467,88 @@ UniValue importwallet(const UniValue& params, bool fHelp)
     if (fPruneMode)
         throw JSONRPCError(RPC_WALLET_ERROR, "Importing wallets is disabled in pruned mode");
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    EnsureWalletIsUnlocked();
-
-    ifstream file;
-    file.open(params[0].get_str().c_str(), std::ios::in | std::ios::ate);
-    if (!file.is_open())
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot open wallet dump file");
-
-    int64_t nTimeBegin = chainActive.Tip()->GetBlockTime();
-
+    int64_t nTimeBegin = 0;
     bool fGood = true;
+    CBlockIndex *pindex = nullptr;
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    int64_t nFilesize = std::max((int64_t)1, (int64_t)file.tellg());
-    file.seekg(0, file.beg);
+        EnsureWalletIsUnlocked();
 
-    pwalletMain->ShowProgress(_("Importing..."), 0); // show progress dialog in GUI
-    while (file.good()) {
-        pwalletMain->ShowProgress("", std::max(1, std::min(99, (int)(((double)file.tellg() / (double)nFilesize) * 100))));
-        std::string line;
-        std::getline(file, line);
-        if (line.empty() || line[0] == '#')
-            continue;
+        ifstream file;
+        file.open(params[0].get_str().c_str(), std::ios::in | std::ios::ate);
+        if (!file.is_open())
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot open wallet dump file");
 
-        std::vector<std::string> vstr;
-        boost::split(vstr, line, boost::is_any_of(" "));
-        if (vstr.size() < 2)
-            continue;
-        CBitcoinSecret vchSecret;
-        if (!vchSecret.SetString(vstr[0]))
-            continue;
-        CKey key = vchSecret.GetKey();
-        CPubKey pubkey = key.GetPubKey();
-        assert(key.VerifyPubKey(pubkey));
-        CKeyID keyid = pubkey.GetID();
-        if (pwalletMain->HaveKey(keyid)) {
-            LogPrintf("Skipping import of %s (key already present)\n",
-                      EncodeDestination(keyid));
-            continue;
-        }
-        int64_t nTime = DecodeDumpTime(vstr[1]);
-        std::string strLabel;
-        bool fLabel = true;
-        for (unsigned int nStr = 2; nStr < vstr.size(); nStr++) {
-            if (boost::algorithm::starts_with(vstr[nStr], "#"))
-                break;
-            if (vstr[nStr] == "change=1")
-                fLabel = false;
-            if (vstr[nStr] == "reserve=1")
-                fLabel = false;
-            if (boost::algorithm::starts_with(vstr[nStr], "label=")) {
-                strLabel = DecodeDumpString(vstr[nStr].substr(6));
-                fLabel = true;
+        nTimeBegin = chainActive.Tip()->GetBlockTime();
+
+        int64_t nFilesize = std::max((int64_t)1, (int64_t)file.tellg());
+        file.seekg(0, file.beg);
+
+        pwalletMain->ShowProgress(_("Importing..."), 0); // show progress dialog in GUI
+        while (file.good()) {
+            pwalletMain->ShowProgress("", std::max(1, std::min(99, (int)(((double)file.tellg() / (double)nFilesize) * 100))));
+            std::string line;
+            std::getline(file, line);
+            if (line.empty() || line[0] == '#')
+                continue;
+
+            std::vector<std::string> vstr;
+            boost::split(vstr, line, boost::is_any_of(" "));
+            if (vstr.size() < 2)
+                continue;
+            CBitcoinSecret vchSecret;
+            if (!vchSecret.SetString(vstr[0]))
+                continue;
+            CKey key = vchSecret.GetKey();
+            CPubKey pubkey = key.GetPubKey();
+            assert(key.VerifyPubKey(pubkey));
+            CKeyID keyid = pubkey.GetID();
+            if (pwalletMain->HaveKey(keyid)) {
+                LogPrintf("Skipping import of %s (key already present)\n",
+                          EncodeDestination(keyid));
+                continue;
             }
+            int64_t nTime = DecodeDumpTime(vstr[1]);
+            std::string strLabel;
+            bool fLabel = true;
+            for (unsigned int nStr = 2; nStr < vstr.size(); nStr++) {
+                if (boost::algorithm::starts_with(vstr[nStr], "#"))
+                    break;
+                if (vstr[nStr] == "change=1")
+                    fLabel = false;
+                if (vstr[nStr] == "reserve=1")
+                    fLabel = false;
+                if (boost::algorithm::starts_with(vstr[nStr], "label=")) {
+                    strLabel = DecodeDumpString(vstr[nStr].substr(6));
+                    fLabel = true;
+                }
+            }
+            LogPrintf("Importing %s...\n", EncodeDestination(keyid));
+            if (!pwalletMain->AddKeyPubKey(key, pubkey)) {
+                fGood = false;
+                continue;
+            }
+            pwalletMain->mapKeyMetadata[keyid].nCreateTime = nTime;
+            if (fLabel)
+                pwalletMain->SetAddressBook(keyid, strLabel, "receive");
+            nTimeBegin = std::min(nTimeBegin, nTime);
         }
-        LogPrintf("Importing %s...\n", EncodeDestination(keyid));
-        if (!pwalletMain->AddKeyPubKey(key, pubkey)) {
-            fGood = false;
-            continue;
-        }
-        pwalletMain->mapKeyMetadata[keyid].nCreateTime = nTime;
-        if (fLabel)
-            pwalletMain->SetAddressBook(keyid, strLabel, "receive");
-        nTimeBegin = std::min(nTimeBegin, nTime);
+        file.close();
+        pwalletMain->ShowProgress("", 100); // hide progress dialog in GUI
+
+        pindex = chainActive.Tip();
+        while (pindex && pindex->pprev && pindex->GetBlockTime() > nTimeBegin - 7200)
+            pindex = pindex->pprev;
+
+        if (!pwalletMain->nTimeFirstKey || nTimeBegin < pwalletMain->nTimeFirstKey)
+            pwalletMain->nTimeFirstKey = nTimeBegin;
     }
-    file.close();
-    pwalletMain->ShowProgress("", 100); // hide progress dialog in GUI
-
-    CBlockIndex *pindex = chainActive.Tip();
-    while (pindex && pindex->pprev && pindex->GetBlockTime() > nTimeBegin - 7200)
-        pindex = pindex->pprev;
-
-    if (!pwalletMain->nTimeFirstKey || nTimeBegin < pwalletMain->nTimeFirstKey)
-        pwalletMain->nTimeFirstKey = nTimeBegin;
 
     LogPrintf("Rescanning last %i blocks\n", chainActive.Height() - pindex->nHeight + 1);
     pwalletMain->ScanForWalletTransactions(pindex);
     pwalletMain->MarkDirty();
+    pwalletMain->AbandonStaleLocalCoinstakes();
 
     if (!fGood)
         throw JSONRPCError(RPC_WALLET_ERROR, "Error adding some keys to wallet");
@@ -549,11 +563,11 @@ UniValue dumpprivkey(const UniValue& params, bool fHelp)
     
     if (fHelp || params.size() != 1)
         throw runtime_error(
-            "dumpprivkey \"blackcoinaddress\"\n"
-            "\nReveals the private key corresponding to 'blackcoinaddress'.\n"
+            "dumpprivkey \"quavenceaddress\"\n"
+            "\nReveals the private key corresponding to 'quavenceaddress'.\n"
             "Then the importprivkey can be used with this output\n"
             "\nArguments:\n"
-            "1. \"blackcoinaddress\"   (string, required) The blackcoin address for the private key\n"
+            "1. \"quavenceaddress\"   (string, required) The quavence address for the private key\n"
             "\nResult:\n"
             "\"key\"                (string) The private key\n"
             "\nExamples:\n"

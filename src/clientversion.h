@@ -15,8 +15,8 @@
 
 //! These need to be macros, as clientversion.cpp's and bitcoin*-res.rc's voodoo requires it
 #define CLIENT_VERSION_MAJOR 13
-#define CLIENT_VERSION_MINOR 2
-#define CLIENT_VERSION_BUILD 2
+#define CLIENT_VERSION_MINOR 4
+#define CLIENT_VERSION_BUILD 5
 
 //! Set to true for release, false for prerelease or test build
 #define CLIENT_VERSION_IS_RELEASE true
@@ -25,7 +25,7 @@
  * Copyright year (2009-this)
  * Todo: update this when changing our copyright comments in the source
  */
-#define COPYRIGHT_YEAR 2024
+#define COPYRIGHT_YEAR 2026
 
 #endif //HAVE_CONFIG_H
 

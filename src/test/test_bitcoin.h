@@ -24,6 +24,14 @@ struct BasicTestingSetup {
     ~BasicTestingSetup();
 };
 
+/** Like BasicTestingSetup but without P2P (avoids CInv races in pure unit tests). */
+struct NoNetworkTestingSetup {
+    ECCVerifyHandle globalVerifyHandle;
+
+    NoNetworkTestingSetup(const std::string& chainName = CBaseChainParams::MAIN);
+    ~NoNetworkTestingSetup();
+};
+
 /** Testing setup that configures a complete environment.
  * Included are data directory, coins database, script check threads setup.
  */
@@ -50,7 +58,8 @@ struct TestChain100Setup : public TestingSetup {
     // Create a new block with just given transactions, coinbase paying to
     // scriptPubKey, and try to add it to the current chain.
     CBlock CreateAndProcessBlock(const std::vector<CMutableTransaction>& txns,
-                                 const CScript& scriptPubKey);
+                                 const CScript& scriptPubKey,
+                                 bool fMustConnect = true);
 
     ~TestChain100Setup();
 

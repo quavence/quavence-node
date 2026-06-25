@@ -46,6 +46,21 @@ BasicTestingSetup::~BasicTestingSetup()
         ECC_Stop();
 }
 
+NoNetworkTestingSetup::NoNetworkTestingSetup(const std::string& chainName)
+{
+        ECC_Start();
+        SetupEnvironment();
+        fPrintToDebugLog = false;
+        fCheckBlockIndex = true;
+        SelectParams(chainName);
+        noui_connect();
+}
+
+NoNetworkTestingSetup::~NoNetworkTestingSetup()
+{
+        ECC_Stop();
+}
+
 TestingSetup::TestingSetup(const std::string& chainName) : BasicTestingSetup(chainName)
 {
     const CChainParams& chainparams = Params();
@@ -102,7 +117,7 @@ TestChain100Setup::TestChain100Setup() : TestingSetup(CBaseChainParams::REGTEST)
 // scriptPubKey, and try to add it to the current chain.
 //
 CBlock
-TestChain100Setup::CreateAndProcessBlock(const std::vector<CMutableTransaction>& txns, const CScript& scriptPubKey)
+TestChain100Setup::CreateAndProcessBlock(const std::vector<CMutableTransaction>& txns, const CScript& scriptPubKey, bool fMustConnect)
 {
     const CChainParams& chainparams = Params();
     CBlockTemplate *pblocktemplate = BlockAssembler(chainparams).CreateNewBlock(scriptPubKey);
@@ -117,10 +132,15 @@ TestChain100Setup::CreateAndProcessBlock(const std::vector<CMutableTransaction>&
     unsigned int extraNonce = 0;
     IncrementExtraNonce(&block, chainActive.Tip(), extraNonce);
 
-    while (!CheckProofOfWork(block.GetHash(), block.nBits, chainparams.GetConsensus())) ++block.nNonce;
+    while (!CheckProofOfWork(block.GetPoWHash(), block.nBits, chainparams.GetConsensus())) ++block.nNonce;
 
     CValidationState state;
     ProcessNewBlock(state, chainparams, nullptr, &block, true, nullptr, false);
+    if (fMustConnect) {
+        BOOST_REQUIRE_MESSAGE(state.IsValid(), state.GetRejectReason().c_str());
+        BOOST_REQUIRE_MESSAGE(chainActive.Tip()->GetBlockHash() == block.GetHash(),
+            strprintf("block not connected: %s", state.GetRejectReason()).c_str());
+    }
 
     CBlock result = block;
     delete pblocktemplate;

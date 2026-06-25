@@ -24,6 +24,7 @@
 #include "timedata.h"
 #include "txmempool.h"
 #include "uint256.h"
+#include "util.h"
 #include "utilstrencodings.h"
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
@@ -166,7 +167,7 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp)
             "         \"reqSigs\" : n,            (numeric) The required sigs\n"
             "         \"type\" : \"pubkeyhash\",  (string) The type, eg 'pubkeyhash'\n"
             "         \"addresses\" : [           (json array of string)\n"
-            "           \"blackcoinaddress\"        (string) blackcoin address\n"
+            "           \"quavenceaddress\"        (string) quavence address\n"
             "           ,...\n"
             "         ]\n"
             "       }\n"

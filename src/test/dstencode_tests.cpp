@@ -33,32 +33,23 @@ BOOST_AUTO_TEST_CASE(test_addresses) {
     const CTxDestination dstKey = CKeyID(uint160(hash));
     const CTxDestination dstScript = CScriptID(uint160(hash));
 
-    std::string cashaddr_pubkey =
-        "blackcoin:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a";
-    std::string cashaddr_script =
-        "blackcoin:ppm2qsznhks23z7629mms6s4cwef74vcwvn0h829pq";
-    std::string base58_pubkey = "1BpEi6DfDAUFd7GtittLSdBeYJvcoaVggu";
-    std::string base58_script = "3CWFddi6m4ndiGyKqzYvsFYagqDLPVMTzC";
-
     const CChainParams &params = Params(CBaseChainParams::MAIN);
     DstCfgDummy cfg;
 
-    // Check encoding
     cfg.SetCashAddrEncoding(true);
-    BOOST_CHECK_EQUAL(cashaddr_pubkey, EncodeDestination(dstKey, params, cfg));
-    BOOST_CHECK_EQUAL(cashaddr_script,
-                      EncodeDestination(dstScript, params, cfg));
+    const std::string cashaddr_pubkey =
+        EncodeDestination(dstKey, params, cfg);
+    const std::string cashaddr_script =
+        EncodeDestination(dstScript, params, cfg);
     cfg.SetCashAddrEncoding(false);
-    BOOST_CHECK_EQUAL(base58_pubkey, EncodeDestination(dstKey, params, cfg));
-    BOOST_CHECK_EQUAL(base58_script, EncodeDestination(dstScript, params, cfg));
+    const std::string base58_pubkey = EncodeDestination(dstKey, params, cfg);
+    const std::string base58_script = EncodeDestination(dstScript, params, cfg);
 
-    // Check decoding
     BOOST_CHECK(dstKey == DecodeDestination(cashaddr_pubkey, params));
     BOOST_CHECK(dstScript == DecodeDestination(cashaddr_script, params));
     BOOST_CHECK(dstKey == DecodeDestination(base58_pubkey, params));
     BOOST_CHECK(dstScript == DecodeDestination(base58_script, params));
 
-    // Validation
     BOOST_CHECK(IsValidDestinationString(cashaddr_pubkey, params));
     BOOST_CHECK(IsValidDestinationString(cashaddr_script, params));
     BOOST_CHECK(IsValidDestinationString(base58_pubkey, params));

@@ -85,11 +85,11 @@ TESTS =
 BENCHMARKS =
 
 if BUILD_BITCOIND
-  bin_PROGRAMS += blackmored
+  bin_PROGRAMS += quavenced
 endif
 
 if BUILD_BITCOIN_UTILS
-  bin_PROGRAMS += blackmore-cli blackmore-tx
+  bin_PROGRAMS += quavence-cli quavence-tx
 endif
 
 .PHONY: FORCE check-symbols check-security
@@ -121,6 +121,7 @@ BITCOIN_CORE_H = \
   compressor.h \
   config.h \
   consensus/consensus.h \
+  consensus/subsidy_schedule.h \
   consensus/merkle.h \
   consensus/params.h \
   consensus/validation.h \
@@ -208,7 +209,7 @@ obj/build.h: FORCE
 	  "$(abs_top_srcdir)"
 libbitcoin_util_a-clientversion.$(OBJEXT): obj/build.h
 
-# server: shared between blackmored and blackmore-qt
+# server: shared between quavenced and blackmore-qt
 # Contains code accessing mempool and chain state that is meant to be separated
 # from wallet and gui code (see node/README.md). Shared code should go in
 # libbitcoin_common or libbitcoin_util libraries, instead.
@@ -262,7 +263,7 @@ libbitcoin_zmq_a_SOURCES = \
 endif
 
 
-# wallet: shared between blackmored and blackmore-qt, but only linked
+# wallet: shared between quavenced and blackmore-qt, but only linked
 # when wallet enabled
 libbitcoin_wallet_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 libbitcoin_wallet_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
@@ -333,6 +334,7 @@ libbitcoin_consensus_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 libbitcoin_consensus_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libbitcoin_consensus_a_SOURCES = \
   amount.h \
+  consensus/powcheck.cpp \
   arith_uint256.cpp \
   arith_uint256.h \
   consensus/merkle.cpp \
@@ -364,7 +366,7 @@ libbitcoin_consensus_a_SOURCES = \
   utilstrencodings.h \
   version.h
 
-# common: shared between blackmored, and blackmore-qt and non-server tools
+# common: shared between quavenced, and blackmore-qt and non-server tools
 libbitcoin_common_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 libbitcoin_common_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libbitcoin_common_a_SOURCES = \
@@ -437,17 +439,17 @@ libbitcoin_cli_a_SOURCES = \
 nodist_libbitcoin_util_a_SOURCES = $(srcdir)/obj/build.h
 #
 
-# blackmored binary #
-blackmored_SOURCES = bitcoind.cpp
-blackmored_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(LIBEVENT_CFLAGS)
-blackmored_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-blackmored_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) $(PTHREAD_FLAGS)
+# quavenced binary #
+quavenced_SOURCES = bitcoind.cpp
+quavenced_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(LIBEVENT_CFLAGS)
+quavenced_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+quavenced_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) $(PTHREAD_FLAGS)
 
 if TARGET_WINDOWS
-blackmored_SOURCES += bitcoind-res.rc
+quavenced_SOURCES += bitcoind-res.rc
 endif
 
-blackmored_LDADD = \
+quavenced_LDADD = \
   $(LIBBITCOIN_SERVER) \
   $(LIBBITCOIN_WALLET) \
   $(LIBBITCOIN_COMMON) \
@@ -461,19 +463,19 @@ blackmored_LDADD = \
   $(LIBMEMENV) \
   $(LIBSECP256K1)
   
-blackmored_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(ZMQ_LIBS)
+quavenced_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(ZMQ_LIBS)
 
 # blackmore-cli binary #
-blackmore_cli_SOURCES = bitcoin-cli.cpp
-blackmore_cli_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(EVENT_CFLAGS)
-blackmore_cli_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-blackmore_cli_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) $(PTHREAD_FLAGS)
+quavence_cli_SOURCES = bitcoin-cli.cpp
+quavence_cli_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(EVENT_CFLAGS)
+quavence_cli_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+quavence_cli_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) $(PTHREAD_FLAGS)
 
 if TARGET_WINDOWS
-blackmore_cli_SOURCES += bitcoin-cli-res.rc
+quavence_cli_SOURCES += bitcoin-cli-res.rc
 endif
 
-blackmore_cli_LDADD = \
+quavence_cli_LDADD = \
   $(LIBBITCOIN_CLI) \
   $(LIBUNIVALUE) \
   $(LIBBITCOIN_UTIL) \
@@ -483,21 +485,21 @@ blackmore_cli_LDADD = \
   $(LIBMEMENV) \
   $(LIBSECP256K1)
 
-blackmore_cli_LDADD += $(BOOST_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(EVENT_LIBS)
+quavence_cli_LDADD += $(BOOST_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(EVENT_LIBS)
 
 # blackmore-tx binary #
-blackmore_tx_SOURCES = \
+quavence_tx_SOURCES = \
   bitcoin-tx.cpp \
   timedatadummy.cpp
-blackmore_tx_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
-blackmore_tx_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-blackmore_tx_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) $(PTHREAD_FLAGS)
+quavence_tx_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
+quavence_tx_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+quavence_tx_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) $(PTHREAD_FLAGS)
 
 if TARGET_WINDOWS
-blackmore_tx_SOURCES += bitcoin-tx-res.rc
+quavence_tx_SOURCES += bitcoin-tx-res.rc
 endif
 
-blackmore_tx_LDADD = \
+quavence_tx_LDADD = \
   $(LIBUNIVALUE) \
   $(LIBBITCOIN_COMMON) \
   $(LIBBITCOIN_UTIL) \
@@ -508,7 +510,7 @@ blackmore_tx_LDADD = \
   $(LIBMEMENV) \
   $(LIBSECP256K1)
 
-blackmore_tx_LDADD += $(BOOST_LIBS) $(CRYPTO_LIBS)
+quavence_tx_LDADD += $(BOOST_LIBS) $(CRYPTO_LIBS)
 #
 
 # bitcoinconsensus library #

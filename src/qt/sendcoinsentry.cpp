@@ -32,7 +32,7 @@ SendCoinsEntry::SendCoinsEntry(const PlatformStyle *platformStyle, QWidget *pare
 
     ui->messageTextLabel->setToolTip(tr("A message that was attached to the %1 URI which will be"
                                         " stored with the transaction for your reference. Note: "
-                                        "This message will not be sent over the Bitcoin network.")
+                                        "This message will not be sent over the Quavence network.")
                                          .arg(GUIUtil::bitcoinURIScheme(GetConfig())));
 
     setCurrentWidget(ui->SendCoins);

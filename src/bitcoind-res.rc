@@ -16,14 +16,14 @@ BEGIN
     BEGIN
         BLOCK "040904E4" // U.S. English - multilingual (hex)
         BEGIN
-            VALUE "CompanyName",        "Blackcoin"
-            VALUE "FileDescription",    "blackmored (Blackcoin node with a JSON-RPC server)"
+            VALUE "CompanyName",        "Quavence"
+            VALUE "FileDescription",    "quavenced (Quavence node with a JSON-RPC server)"
             VALUE "FileVersion",        VER_FILEVERSION_STR
-            VALUE "InternalName",       "blackmored"
+            VALUE "InternalName",       "quavenced"
             VALUE "LegalCopyright",     COPYRIGHT_STR
             VALUE "LegalTrademarks1",   "Distributed under the MIT software license, see the accompanying file COPYING or http://www.opensource.org/licenses/mit-license.php."
-            VALUE "OriginalFilename",   "blackmored.exe"
-            VALUE "ProductName",        "blackmored"
+            VALUE "OriginalFilename",   "quavenced.exe"
+            VALUE "ProductName",        "quavenced"
             VALUE "ProductVersion",     VER_PRODUCTVERSION_STR
         END
     END

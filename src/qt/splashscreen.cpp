@@ -30,10 +30,11 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     QWidget(0, f), curAlignment(0)
 {
     // set reference point, paddings
-    int paddingRight            = 15;
-    int paddingTop              = 50;
-    int titleVersionVSpace      = 17;
-    int titleCopyrightVSpace    = 40;
+    const int iconAreaWidth     = 220;
+    int paddingRight            = 20;
+    int paddingTop              = 48;
+    int titleVersionVSpace      = 18;
+    int titleCopyrightVSpace    = 48;
 
     float fontFactor            = 1.0;
     float devicePixelRatio      = 1.0;
@@ -45,17 +46,18 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     QString titleText       = tr(PACKAGE_NAME);
     QString versionText     = QString("Version %1").arg(QString::fromStdString(FormatFullVersion()));
 
-    QString copyrightTextBitcoin     = QChar(0xA9)+QString(" %1-%2 ").arg(2009).arg(COPYRIGHT_YEAR) + QString("The Bitcoin Core developers");
-    QString copyrightTextBlackcoin   = QChar(0xA9)+QString(" %1-%2 ").arg(2014).arg(2018) + QString("The Blackcoin developers");
-    QString copyrightTextBlackmore   = QChar(0xA9)+QString(" %1-%2 ").arg(2018).arg(COPYRIGHT_YEAR) + QString("The Blackcoin More developers");
-    // QString copyrightText   = QChar(0xA9)+QString(" %1-%2 ").arg(2009).arg(COPYRIGHT_YEAR) + QString::fromStdString(CopyrightHolders());
+    const QChar copySign(0xA9);
+    QString copyrightTextBitcoinCore = copySign + QString(" %1-%2 ").arg(2009).arg(COPYRIGHT_YEAR) + QString("The Bitcoin Core developers");
+    QString copyrightTextBlackcoin   = copySign + QString(" 2014-2018 ") + QString("The Blackcoin developers");
+    QString copyrightTextBlackmore   = copySign + QString(" 2018-2024 ") + QString("The Blackcoin More developers");
+    QString copyrightTextQuavence    = copySign + QString(" %1 ").arg(COPYRIGHT_YEAR) + QString("The Quavence developers");
 
     QString titleAddText    = networkStyle->getTitleAddText();
 
     QString font            = QApplication::font().toString();
 
     // create a bitmap according to device pixelratio
-    QSize splashSize(480*devicePixelRatio,320*devicePixelRatio);
+    QSize splashSize(620*devicePixelRatio, 360*devicePixelRatio);
     pixmap = QPixmap(splashSize);
 
 #if QT_VERSION > 0x050100
@@ -73,26 +75,30 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     QRect rGradient(QPoint(0,0), splashSize);
     pixPaint.fillRect(rGradient, gradient);
 
-    // draw the bitcoin icon, expected size of PNG: 1024x1024
-    QRect rectIcon(QPoint(-130,-102), QSize(430,430));
+    // App icon (left); PNG should be square with transparent background
+    const int splashW = pixmap.width() / devicePixelRatio;
+    const int textLeft = iconAreaWidth + 10;
+    const int textWidth = splashW - textLeft - paddingRight;
 
-    const QSize requiredSize(1024,1024);
-    QPixmap icon(networkStyle->getAppIcon().pixmap(requiredSize));
+    const QSize iconSize(180 * devicePixelRatio, 180 * devicePixelRatio);
+    QPixmap icon(networkStyle->getAppIcon().pixmap(iconSize));
+    icon.setDevicePixelRatio(devicePixelRatio);
+    const int iconX = (iconAreaWidth - 180) / 2;
+    pixPaint.drawPixmap(iconX, 72, 180, 180, icon);
 
-    pixPaint.drawPixmap(rectIcon, icon);
-
-    // check font size and drawing with
+    // Title and version (right column)
     pixPaint.setFont(QFont(font, 33*fontFactor));
     QFontMetrics fm = pixPaint.fontMetrics();
     int titleTextWidth = fm.width(titleText);
-    if (titleTextWidth > 176) {
-        fontFactor = fontFactor * 176 / titleTextWidth;
+    if (titleTextWidth > textWidth) {
+        fontFactor = fontFactor * textWidth / titleTextWidth;
     }
 
     pixPaint.setFont(QFont(font, 33*fontFactor));
     fm = pixPaint.fontMetrics();
-    titleTextWidth  = fm.width(titleText);
-    pixPaint.drawText(pixmap.width()/devicePixelRatio-titleTextWidth-paddingRight,paddingTop,titleText);
+    titleTextWidth = fm.width(titleText);
+    const int textX = textLeft + qMax(0, textWidth - titleTextWidth);
+    pixPaint.drawText(textX, paddingTop, titleText);
 
     pixPaint.setFont(QFont(font, 15*fontFactor));
 
@@ -103,16 +109,19 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
         pixPaint.setFont(QFont(font, 10*fontFactor));
         titleVersionVSpace -= 5;
     }
-    pixPaint.drawText(pixmap.width()/devicePixelRatio-titleTextWidth-paddingRight+2,paddingTop+titleVersionVSpace,versionText);
+    pixPaint.drawText(textX, paddingTop + titleVersionVSpace, versionText);
 
-    // draw copyright stuff
+    // Copyright lines (smaller font, fixed column width)
     {
-        pixPaint.setFont(QFont(font, 10*fontFactor));
-        const int x = pixmap.width()/devicePixelRatio-titleTextWidth-paddingRight;
-        const int y = paddingTop+titleCopyrightVSpace;
-        pixPaint.drawText(x,y,copyrightTextBitcoin);
-        pixPaint.drawText(x,y+10,copyrightTextBlackcoin);
-        pixPaint.drawText(x,y+20,copyrightTextBlackmore);
+        const int crFontSize = qMax(7, int(8 * fontFactor));
+        pixPaint.setFont(QFont(font, crFontSize));
+        const int y = paddingTop + titleCopyrightVSpace;
+        const int lineH = crFontSize + 3;
+        const QRect crRect(textLeft, y, textWidth, lineH * 4);
+        pixPaint.drawText(crRect, Qt::AlignLeft | Qt::AlignTop, copyrightTextBitcoinCore);
+        pixPaint.drawText(crRect.translated(0, lineH), Qt::AlignLeft | Qt::AlignTop, copyrightTextBlackcoin);
+        pixPaint.drawText(crRect.translated(0, lineH * 2), Qt::AlignLeft | Qt::AlignTop, copyrightTextBlackmore);
+        pixPaint.drawText(crRect.translated(0, lineH * 3), Qt::AlignLeft | Qt::AlignTop, copyrightTextQuavence);
     }
 
     // draw additional text if special network
@@ -122,7 +131,7 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
         pixPaint.setFont(boldFont);
         fm = pixPaint.fontMetrics();
         int titleAddTextWidth  = fm.width(titleAddText);
-        pixPaint.drawText(pixmap.width()/devicePixelRatio-titleAddTextWidth-10,15,titleAddText);
+        pixPaint.drawText(splashW - titleAddTextWidth - 10, 15, titleAddText);
     }
 
     pixPaint.end();

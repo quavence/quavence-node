@@ -761,6 +761,7 @@ public:
     bool AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb);
     void SyncTransaction(const CTransaction& tx, const CBlockIndex *pindex, const CBlock* pblock);
     bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate);
+    bool AddGenesisIfInvolvingMe(bool fUpdate = true);
     int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false);
     void ReacceptWalletTransactions();
     void ResendWalletTransactions(int64_t nBestBlockTime);
@@ -828,6 +829,8 @@ public:
     bool IsFromMe(const CTransaction& tx) const;
     CAmount GetDebit(const CTransaction& tx, const isminefilter& filter) const;
     CAmount GetCredit(const CTransaction& tx, const isminefilter& filter) const;
+    /** Sum credit from all non-empty coinstake outputs owned by this wallet. */
+    CAmount GetCoinStakeCredit(const CTransaction& tx, const isminefilter& filter) const;
     CAmount GetChange(const CTransaction& tx) const;
     void SetBestChain(const CBlockLocator& loc);
 
@@ -876,6 +879,18 @@ public:
     int GetVersion() { LOCK(cs_wallet); return nWalletVersion; }
 
     void DisableTransaction(const CTransaction &tx);
+
+    /**
+     * Local PoS coinstake that never made it to main chain or mempool (stale stake attempt).
+     * Caller must hold cs_main and cs_wallet (see IsSpent / AbandonStaleLocalCoinstakes).
+     */
+    bool IsStaleLocalCoinstake(const CWalletTx& wtx) const;
+    /**
+     * Mark stale local coinstakes abandoned so kernel UTXOs are spendable again.
+     * Collects candidates under lock, calls AbandonTransaction outside (no nested LOCK2).
+     * Idempotent: already-abandoned or confirmed coinstakes are skipped.
+     */
+    void AbandonStaleLocalCoinstakes();
 
     //! Get wallet transactions that conflict with given transaction (spend same outputs)
     std::set<uint256> GetConflicts(const uint256& txid) const;

@@ -13,7 +13,8 @@
 
 #include <boost/test/unit_test.hpp>
 
-BOOST_FIXTURE_TEST_SUITE(PrevectorTests, TestingSetup)
+// No chain/RPC needed; TestingSetup here caused heavy init and sporadic crashes after long runs.
+BOOST_FIXTURE_TEST_SUITE(PrevectorTests, BasicTestingSetup)
 
 template<unsigned int N, typename T>
 class prevector_tester {

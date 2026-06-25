@@ -486,7 +486,10 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageGroup(_("Staking options:"));
     strUsage += HelpMessageOpt("-staking=<n>", strprintf(_("Enable staking functionality (0-1, default: %u)"), 1));
     strUsage += HelpMessageOpt("-reservebalance=<amount>", _("Keep the specified amount of coins available for spending at all times (default: 0)"));
-    strUsage += HelpMessageOpt("-donatetodevfund=<n>", strprintf(_("Donate the specified percentage of staking rewards to the dev fund (default: %u)"), DEFAULT_DONATION_PERCENTAGE));
+    strUsage += HelpMessageOpt("-bootstrapmining=<n>",
+        _("Enable generatebootstrap RPC (height 1..nLastPOWBlock, default: 0). Does not auto-start mining."));
+    strUsage += HelpMessageOpt("-bootstrapmineonstart=<n>",
+        _("Auto-start background PoW bootstrap miner at startup (requires -bootstrapmining=1, default: 0)"));
 #endif
 
     return strUsage;
@@ -494,20 +497,20 @@ std::string HelpMessage(HelpMessageMode mode)
 
 std::string LicenseInfo()
 {
-    const std::string URL_SOURCE_CODE = "<https://gitlab.com/blackcoin/blackcoin-more>";
-    const std::string URL_WEBSITE = "<https://blackcoinmore.org/>";
-    // todo: remove urls from translations on next change
+    const std::string URL_SOURCE_CODE = "<https://github.com/quavence/quavence>";
+    const std::string URL_WEBSITE = "<https://quavence.org/>";
 
-    // return FormatParagraph(strprintf(_("Copyright (C) %i-%i %s"), 2009, COPYRIGHT_YEAR, CopyrightHolders())) + "\n" +
-    return FormatParagraph(strprintf("Copyright (C) %i-%i The Bitcoin Core Developers", 2009, COPYRIGHT_YEAR)) + "\n" +
+    return FormatParagraph(strprintf("Copyright (C) %i-%i The Bitcoin Core developers", 2009, COPYRIGHT_YEAR)) + "\n" +
            "\n" +
-           FormatParagraph(strprintf("Copyright (C) %i-%i The Blackcoin Developers", 2014, 2018)) + "\n" +
+           FormatParagraph("Copyright (C) 2014-2018 The Blackcoin developers") + "\n" +
            "\n" +
-           FormatParagraph(strprintf("Copyright (C) %i-%i The Blackcoin More Developers", 2018, COPYRIGHT_YEAR)) + "\n" +
+           FormatParagraph(strprintf("Copyright (C) 2018-%i The Blackcoin More developers", 2024)) + "\n" +
            "\n" +
-           FormatParagraph(strprintf(_("Please contribute if you find Blackcoin More useful. "
+           FormatParagraph(strprintf("Copyright (C) %i The Quavence developers", COPYRIGHT_YEAR)) + "\n" +
+           "\n" +
+           FormatParagraph(strprintf(_("Please contribute if you find %s useful. "
                        "Visit %s for further information about the software."),
-               URL_WEBSITE)) +
+               PACKAGE_NAME, URL_WEBSITE)) +
            "\n" +
            FormatParagraph(strprintf(_("The source code is available from %s."),
                URL_SOURCE_CODE)) +
@@ -793,7 +796,7 @@ void InitLogging()
     fLogIPs = GetBoolArg("-logips", DEFAULT_LOGIPS);
 
     LogPrintf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
-    LogPrintf("Blackcoin More version %s\n", FormatFullVersion());
+    LogPrintf("%s version %s\n", PACKAGE_NAME, FormatFullVersion());
 }
 
 /** Initialize bitcoin.
@@ -1251,10 +1254,12 @@ bool AppInit2(Config& config, boost::thread_group& threadGroup, CScheduler& sche
         }
     }
 
-    nDonationPercentage = GetArg("-donatetodevfund", DEFAULT_DONATION_PERCENTAGE);
-    if (nDonationPercentage < 0)
+    // Dev-fee percent is defined per-network in chainparams (not in quavence.conf).
+    if (Params().GetDevFundAddress().empty())
         nDonationPercentage = 0;
-    else if (nDonationPercentage > 95)
+    else
+        nDonationPercentage = Params().DevFundDonationPercent();
+    if (nDonationPercentage > 95)
         nDonationPercentage = 95;
 #endif
 
@@ -1545,6 +1550,19 @@ bool AppInit2(Config& config, boost::thread_group& threadGroup, CScheduler& sche
         LogPrintf("Staking disabled\n");
     else if (pwalletMain)
         threadGroup.create_thread(boost::bind(&ThreadStakeMiner, pwalletMain, chainparams));
+
+    // Optional PoW bootstrap miner autostart. -bootstrapmining only gates RPC.
+    // Off by default. Reward is 0 (mainnet), so emission/cap are unaffected.
+    if (GetBoolArg("-bootstrapmining", false) && GetBoolArg("-bootstrapmineonstart", false) && pwalletMain) {
+        if (chainActive.Height() < chainparams.GetConsensus().nLastPOWBlock) {
+            LogPrintf("Starting PoW bootstrap miner (height %d / window %d)\n",
+                      chainActive.Height(), chainparams.GetConsensus().nLastPOWBlock);
+            threadGroup.create_thread(boost::bind(&ThreadPowBootstrapMiner, pwalletMain, chainparams));
+        } else {
+            LogPrintf("bootstrapmineonstart requested but window already closed (height=%d, nLastPOWBlock=%d)\n",
+                      chainActive.Height(), chainparams.GetConsensus().nLastPOWBlock);
+        }
+    }
 
     // ********************************************************* Step 12: finished
 #endif

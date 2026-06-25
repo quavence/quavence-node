@@ -203,7 +203,11 @@ private:
 /** Modify the extranonce in a block */
 void IncrementExtraNonce(CBlock* pblock, const CBlockIndex* pindexPrev, unsigned int& nExtraNonce);
 int64_t UpdateTime(CBlock* pblock, const Consensus::Params& consensusParams, const CBlockIndex* pindexPrev);
-/** Run the miner threads */
+#ifdef ENABLE_WALLET
+/** Run the proof-of-stake miner thread (requires wallet) */
 void ThreadStakeMiner(CWallet *pwallet, const CChainParams& chainparams);
+/** Single-thread PoW bootstrap miner (height 1..nLastPOWBlock, reward=0). */
+void ThreadPowBootstrapMiner(CWallet *pwallet, const CChainParams& chainparams);
+#endif
 
 #endif // BITCOIN_MINER_H

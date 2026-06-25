@@ -376,6 +376,7 @@ void BitcoinApplication::createSplashScreen(const NetworkStyle *networkStyle)
     // We don't hold a direct pointer to the splash screen after creation, but the splash
     // screen will take care of deleting itself when slotFinish happens.
     splash->show();
+    QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
     connect(this, SIGNAL(splashFinished(QWidget*)), splash, SLOT(slotFinish(QWidget*)));
     connect(this, SIGNAL(requestedShutdown()), splash, SLOT(close()));
 }
@@ -525,6 +526,10 @@ int main(int argc, char *argv[])
     // Command-line options take precedence:
     ParseParameters(argc, argv);
 
+#ifdef WIN32
+    EnsureDefaultDataDir();
+#endif
+
     // Do not refer to data directory yet, this can be overridden by Intro::pickDataDirectory
 
     /// 2. Basic Qt initialization (not dependent on parameters or configuration)
@@ -549,6 +554,7 @@ int main(int argc, char *argv[])
 #endif
 
     BitcoinApplication app(argc, argv);
+    GUIUtil::InitBrandPalette();
 
     // Register meta types used for QMetaObject::invokeMethod
     qRegisterMetaType< bool* >();
@@ -594,6 +600,7 @@ int main(int argc, char *argv[])
                               QObject::tr("Error: Specified data directory \"%1\" does not exist.").arg(QString::fromStdString(mapArgs["-datadir"])));
         return EXIT_FAILURE;
     }
+    WriteDefaultConfigFile();
     try {
         ReadConfigFile(mapArgs, mapMultiArgs);
     } catch (const std::exception& e) {
@@ -626,6 +633,9 @@ int main(int argc, char *argv[])
     QApplication::setApplicationName(networkStyle->getAppName());
     // Re-initialize translations after changing application name (language in network-specific settings can be different)
     initTranslations(qtTranslatorBase, qtTranslator, translatorBase, translator);
+
+    if (GetBoolArg("-splash", DEFAULT_SPLASHSCREEN) && !GetBoolArg("-min", false))
+        app.createSplashScreen(networkStyle.data());
 
 #ifdef ENABLE_WALLET
     /// 8. URI IPC sending
@@ -664,9 +674,6 @@ int main(int argc, char *argv[])
 
     // Subscribe to global signals from core
     uiInterface.InitMessage.connect(InitMessage);
-
-    if (GetBoolArg("-splash", DEFAULT_SPLASHSCREEN) && !GetBoolArg("-min", false))
-        app.createSplashScreen(networkStyle.data());
 
     // Get global config
     Config &config = const_cast<Config &>(GetConfig());

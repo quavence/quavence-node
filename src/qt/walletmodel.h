@@ -134,6 +134,7 @@ public:
     CAmount getUnconfirmedBalance() const;
     CAmount getImmatureBalance() const;
     CAmount getStake() const;
+    CAmount getStakeRewards() const;
     bool haveWatchOnly() const;
     CAmount getWatchBalance() const;
     CAmount getWatchUnconfirmedBalance() const;
@@ -158,6 +159,22 @@ public:
 
     // Send coins to a list of recipients
     SendCoinsReturn sendCoins(WalletModelTransaction &transaction);
+
+    /** Stake-split workflow: dummy-output fee/size probe (never consumes wallet keys). */
+    SendCoinsReturn estimateStakeSplitFees(int nOutputs, CAmount amountEach,
+                                           const CCoinControl *coinControl,
+                                           bool sameSourceAddressMode,
+                                           CAmount &feeRetOut,
+                                           unsigned int &txSizeRetOut,
+                                           QString &errorReasonOut,
+                                           QString &resolvedDestinationOut);
+
+    /** Stake-split: reserve each output via CReserveKey; keep keys only after commit succeeds. */
+    SendCoinsReturn commitStakeSplit(int nOutputs, CAmount amountEach,
+                                     const CCoinControl *coinControl,
+                                     bool sameSourceAddressMode,
+                                     QString &errorReasonOut,
+                                     QString &resolvedDestinationOut);
 
     // Wallet encryption
     bool setWalletEncrypted(bool encrypted, const SecureString &passphrase);
@@ -194,6 +211,7 @@ public:
     void getOutputs(const std::vector<COutPoint>& vOutpoints, std::vector<COutput>& vOutputs);
     bool isSpent(const COutPoint& outpoint) const;
     void listCoins(std::map<QString, std::vector<COutput> >& mapCoins) const;
+    void listMatureStakingCoins(std::vector<COutput>& vCoinsOut) const;
 
     bool isLockedCoin(uint256 hash, unsigned int n) const;
     void lockCoin(COutPoint& output);

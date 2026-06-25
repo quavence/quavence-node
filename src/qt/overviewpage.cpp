@@ -15,6 +15,8 @@
 #include "transactiontablemodel.h"
 #include "walletmodel.h"
 
+#include "chainparams.h"
+
 #include <QAbstractItemDelegate>
 #include <QPainter>
 
@@ -138,6 +140,10 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
     ui->listTransactions->setMinimumHeight(NUM_ITEMS * (DECORATION_SIZE + 2));
     ui->listTransactions->setAttribute(Qt::WA_MacShowFocusRect, false);
 
+    // Dev-fee row: hidden until network enables treasury in chainparams
+    ui->labelDonations->setVisible(false);
+    ui->labelDonationsText->setVisible(false);
+
     connect(ui->listTransactions, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
 
     // start with displaying the "out of sync" warnings
@@ -192,7 +198,7 @@ void OverviewPage::setBalance(const CAmount& balance, const CAmount& unconfirmed
     bool showStake = stake != 0;
     bool showWatchOnlyImmature = watchImmatureBalance != 0;
     bool showWatchOnlyStake = watchOnlyStake != 0;
-    bool showDonations = nDonationPercentage != 0;
+    bool showDonations = nDonationPercentage != 0 && !Params().GetDevFundAddress().empty();
 
     // for symmetry reasons also show immature label when the watch-only one is shown
     ui->labelImmature->setVisible(showImmature || showWatchOnlyImmature);

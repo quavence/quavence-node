@@ -425,7 +425,29 @@ QString TransactionTableModel::formatTxToAddress(const TransactionRecord *wtx, b
     case TransactionRecord::RecvWithAddress:
     case TransactionRecord::SendToAddress:
     case TransactionRecord::Generated:
-        return lookupAddress(wtx->address, tooltip) + watchAddress;
+    {
+        LOCK2(cs_main, wallet->cs_wallet);
+        std::map<uint256, CWalletTx>::const_iterator mi = wallet->mapWallet.find(wtx->hash);
+        QString generatedLabel = tr("Generated");
+        if (mi != wallet->mapWallet.end())
+        {
+            const CWalletTx& tx = mi->second;
+            if (tx.IsCoinStake())
+                generatedLabel = tr("Stake reward");
+            else if (tx.IsCoinBase() && wtx->credit == 0)
+                generatedLabel = tr("Bootstrap block");
+
+            if (!tx.hashBlock.IsNull())
+            {
+                BlockMap::const_iterator bi = mapBlockIndex.find(tx.hashBlock);
+                if (bi != mapBlockIndex.end() && bi->second)
+                    generatedLabel += QString(" (h=%1)").arg(bi->second->nHeight);
+            }
+        }
+        if (wtx->address.empty())
+            return generatedLabel + watchAddress;
+        return lookupAddress(wtx->address, tooltip) + " - " + generatedLabel + watchAddress;
+    }
     case TransactionRecord::SendToOther:
         return QString::fromStdString(wtx->address) + watchAddress;
     case TransactionRecord::SendToSelf:

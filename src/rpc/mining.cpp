@@ -16,6 +16,7 @@
 #include "main.h"
 #include "miner.h"
 #include "net.h"
+#include "policy/policy.h"
 #include "pow.h"
 #include "pos.h"
 #include "rpc/server.h"
@@ -187,6 +188,161 @@ UniValue generate(const UniValue& params, bool fHelp)
     return generateBlocks(coinbaseScript, nGenerate, nMaxTries, true);
 }
 
+/**
+ * generatebootstrap nblocks
+ *
+ * PoW bootstrap helper. Mines short PoW chain to push height past genesis so PoS can take over.
+ * Hard constraints:
+ *  - only allowed while tip height < consensus.nLastPOWBlock (the bootstrap window);
+ *  - capped per-call (default 100);
+ *  - uses wallet keypool for coinbase script (refuses if no wallet/script);
+ *  - reward stays 0 (GetProofOfWorkSubsidy()==0 on mainnet) — emission is unaffected.
+ */
+static const int MAX_BOOTSTRAP_BLOCKS_PER_CALL = 100;
+static const int64_t BOOTSTRAP_TIME_SAFETY_MARGIN_SECS = 2;
+
+static int64_t GetBootstrapMaxSafeTime()
+{
+    // Peer-safe policy for bootstrap RPC:
+    // do not emit blocks that are in the future relative to adjusted local time.
+    // This is stricter than consensus FutureDrift and avoids time-too-new relay
+    // issues on early/bootstrap networks with imperfect clock sync.
+    return GetAdjustedTime() - BOOTSTRAP_TIME_SAFETY_MARGIN_SECS;
+}
+
+static UniValue generateBootstrapBlocks(std::shared_ptr<CReserveScript> coinbaseScript, int nGenerate, uint64_t nMaxTries, bool keepScript)
+{
+    static const uint32_t nInnerLoopCount = 0x10000;
+    UniValue blockHashes(UniValue::VARR);
+    unsigned int nExtraNonce = 0;
+    const Consensus::Params& consensusParams = Params().GetConsensus();
+
+    for (int i = 0; i < nGenerate; ++i) {
+        std::unique_ptr<CBlockTemplate> pblocktemplate(BlockAssembler(Params()).CreateNewBlock(coinbaseScript->reserveScript, 0, false));
+        if (!pblocktemplate.get())
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "Couldn't create new block");
+        CBlock* pblock = &pblocktemplate->block;
+
+        {
+            LOCK(cs_main);
+            CBlockIndex* pindexPrev = chainActive.Tip();
+            if (!pindexPrev)
+                throw JSONRPCError(RPC_INTERNAL_ERROR, "No active chain tip");
+
+            const int64_t minRequiredTime = pindexPrev->GetPastTimeLimit() + 1;
+            const int64_t maxSafeTime = GetBootstrapMaxSafeTime();
+            if (minRequiredTime > maxSafeTime) {
+                const int64_t waitSeconds = std::max<int64_t>(1, minRequiredTime - maxSafeTime);
+                throw JSONRPCError(
+                    RPC_MISC_ERROR,
+                    strprintf("Cannot generate next bootstrap block yet: timestamp would be too far in the future. Try again in %d seconds.",
+                              waitSeconds));
+            }
+
+            // Keep nTime strictly above MTP and not in the future (peer-safe).
+            pblock->nTime = std::max<int64_t>(minRequiredTime, std::min<int64_t>(GetAdjustedTime(), maxSafeTime));
+            pblock->vtx[0].nTime = pblock->nTime;
+            pblock->nNonce = 0;
+            IncrementExtraNonce(pblock, pindexPrev, nExtraNonce);
+        }
+
+        uint64_t nTries = nMaxTries;
+        while (nTries > 0 && pblock->nNonce < nInnerLoopCount &&
+               !CheckProofOfWork(pblock->GetPoWHash(), pblock->nBits, consensusParams)) {
+            ++pblock->nNonce;
+            --nTries;
+        }
+        if (nTries == 0)
+            break;
+        if (pblock->nNonce == nInnerLoopCount)
+            continue;
+
+        {
+            LOCK(cs_main);
+            const int64_t maxSafeNow = GetBootstrapMaxSafeTime();
+            if (pblock->nTime > maxSafeNow) {
+                const int64_t waitSeconds = std::max<int64_t>(1, pblock->nTime - maxSafeNow);
+                throw JSONRPCError(
+                    RPC_MISC_ERROR,
+                    strprintf("Cannot generate next bootstrap block yet: timestamp would be too far in the future. Try again in %d seconds.",
+                              waitSeconds));
+            }
+            const int64_t maxConsensusNow = FutureDrift(GetAdjustedTime()) - BOOTSTRAP_TIME_SAFETY_MARGIN_SECS;
+            if (pblock->nTime > maxConsensusNow) {
+                const int64_t waitSeconds = std::max<int64_t>(1, pblock->nTime - maxConsensusNow);
+                throw JSONRPCError(
+                    RPC_MISC_ERROR,
+                    strprintf("Cannot generate next bootstrap block yet: timestamp would violate consensus future drift. Try again in %d seconds.",
+                              waitSeconds));
+            }
+        }
+
+        CValidationState state;
+        uint256 hash = pblock->GetHash();
+        if (!ProcessNewBlock(state, Params(), NULL, pblock, true, NULL, false))
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "ProcessNewBlock, block not accepted");
+        blockHashes.push_back(hash.GetHex());
+
+        // mark script as important because it was used at least for one coinbase output if the script came from the wallet
+        if (keepScript)
+            coinbaseScript->KeepScript();
+    }
+
+    return blockHashes;
+}
+
+UniValue generatebootstrap(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() < 1 || params.size() > 2)
+        throw runtime_error(
+            "generatebootstrap nblocks ( maxtries )\n"
+            "\nMine up to nblocks PoW bootstrap blocks (height 1..nLastPOWBlock).\n"
+            "Refuses after height >= nLastPOWBlock or if asked for more than the per-call cap.\n"
+            "\nArguments:\n"
+            "1. nblocks    (numeric, required) Blocks to mine (1.." + itostr(MAX_BOOTSTRAP_BLOCKS_PER_CALL) + ").\n"
+            "2. maxtries   (numeric, optional) Hash attempts per block (default 1000000).\n"
+            "\nResult\n"
+            "[ blockhashes ]   (array) hashes of blocks generated\n"
+            "\nExamples:\n"
+            + HelpExampleCli("generatebootstrap", "10")
+        );
+
+    int nGenerate = params[0].get_int();
+    if (nGenerate < 1)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "nblocks must be >= 1");
+    if (nGenerate > MAX_BOOTSTRAP_BLOCKS_PER_CALL)
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("nblocks exceeds per-call cap (%d)", MAX_BOOTSTRAP_BLOCKS_PER_CALL));
+
+    if (!GetBoolArg("-bootstrapmining", false))
+        throw JSONRPCError(RPC_MISC_ERROR,
+            "generatebootstrap is disabled. Start node with -bootstrapmining=1");
+
+    const Consensus::Params& consensusParams = Params().GetConsensus();
+    {
+        LOCK(cs_main);
+        const int nHeight = chainActive.Height();
+        if (nHeight >= consensusParams.nLastPOWBlock)
+            throw JSONRPCError(RPC_MISC_ERROR, "PoW bootstrap window is closed");
+        if (nHeight + nGenerate > consensusParams.nLastPOWBlock)
+            nGenerate = consensusParams.nLastPOWBlock - nHeight;
+    }
+
+    uint64_t nMaxTries = 1000000;
+    if (params.size() > 1)
+        nMaxTries = params[1].get_int();
+
+    std::shared_ptr<CReserveScript> coinbaseScript;
+    GetMainSignals().ScriptForMining(coinbaseScript);
+    if (!coinbaseScript)
+        throw JSONRPCError(RPC_WALLET_KEYPOOL_RAN_OUT,
+            "Bootstrap mining requires a wallet keypool entry. Run keypoolrefill or unlock the wallet.");
+    if (coinbaseScript->reserveScript.empty())
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "No coinbase script available (wallet build required)");
+
+    return generateBootstrapBlocks(coinbaseScript, nGenerate, nMaxTries, true);
+}
+
 UniValue generatetoaddress(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 2 || params.size() > 3)
@@ -268,8 +424,10 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
             "Returns an object containing staking-related information.");
 
     uint64_t nWeight = 0;
+#ifdef ENABLE_WALLET
     if (pwalletMain)
         nWeight = pwalletMain->GetStakeWeight();
+#endif
 
     uint64_t nNetworkWeight = 1.1429 * GetPoSKernelPS();
     bool staking = nLastCoinStakeSearchInterval && nWeight;
@@ -892,6 +1050,7 @@ UniValue checkkernel(const UniValue& params, bool fHelp)
         if (!fCreateBlockTemplate)
             return result;
 
+#ifdef ENABLE_WALLET
         int64_t nFees;
         if (!pwalletMain->IsLocked())
             pwalletMain->TopUpKeyPool();
@@ -917,6 +1076,9 @@ UniValue checkkernel(const UniValue& params, bool fHelp)
         result.push_back(Pair("blocktemplatesignkey", HexStr(pubkey)));
 
         return result;
+#else
+        throw JSONRPCError(RPC_MISC_ERROR, "checkkernel with createblocktemplate=true requires a wallet-enabled build");
+#endif
 }
 
 UniValue estimatepriority(const UniValue& params, bool fHelp)
@@ -1031,6 +1193,7 @@ static const CRPCCommand commands[] =
 
     { "generating",         "generate",               &generate,               true  },
     { "generating",         "generatetoaddress",      &generatetoaddress,      true  },
+    { "generating",         "generatebootstrap",      &generatebootstrap,      true  },
 
     { "util",               "estimatefee",            &estimatefee,            true  },
     { "util",               "estimatepriority",       &estimatepriority,       true  },

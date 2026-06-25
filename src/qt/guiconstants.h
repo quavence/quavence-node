@@ -26,7 +26,7 @@ static const bool DEFAULT_SPLASHSCREEN = true;
 /* Transaction list -- bare address (without label) */
 #define COLOR_BAREADDRESS QColor(140, 140, 140)
 /* Transaction list -- TX status decoration - open until date */
-#define COLOR_TX_STATUS_OPENUNTILDATE QColor(64, 64, 255)
+#define COLOR_TX_STATUS_OPENUNTILDATE QColor(212, 160, 23)
 /* Transaction list -- TX status decoration - offline */
 #define COLOR_TX_STATUS_OFFLINE QColor(192, 192, 192)
 /* Transaction list -- TX status decoration - danger, tx needs attention */
@@ -48,9 +48,9 @@ static const int MAX_URI_LENGTH = 255;
 /* Number of frames in spinner animation */
 #define SPINNER_FRAMES 36
 
-#define QAPP_ORG_NAME "Blackcoin More"
-#define QAPP_ORG_DOMAIN "blackcoinmore.org"
-#define QAPP_APP_NAME_DEFAULT "Blackmore-Qt"
-#define QAPP_APP_NAME_TESTNET "Blackmore-Qt-testnet"
+#define QAPP_ORG_NAME "Quavence"
+#define QAPP_ORG_DOMAIN "quavence.org"
+#define QAPP_APP_NAME_DEFAULT "Quavence-Qt"
+#define QAPP_APP_NAME_TESTNET "Quavence-Qt-testnet"
 
 #endif // BITCOIN_QT_GUICONSTANTS_H

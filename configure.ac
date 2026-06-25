@@ -1,12 +1,14 @@
 AC_PREREQ([2.69])
+dnl Quavence: bump _CLIENT_VERSION_BUILD (or MINOR) for every published binary pair (quavenced + quavence-qt).
+dnl Keep the one-line VERSION file in the repo root in sync with these four lines.
 define(_CLIENT_VERSION_MAJOR, 13)
-define(_CLIENT_VERSION_MINOR, 2)
-define(_CLIENT_VERSION_BUILD, 2)
+define(_CLIENT_VERSION_MINOR, 4)
+define(_CLIENT_VERSION_BUILD, 5)
 define(_CLIENT_VERSION_IS_RELEASE, true)
-define(_COPYRIGHT_YEAR, 2024)
+define(_COPYRIGHT_YEAR, 2026)
 define(_COPYRIGHT_HOLDERS,[The %s developers])
-define(_COPYRIGHT_HOLDERS_SUBSTITUTION,[[Blackcoin More]])
-AC_INIT([Blackcoin More],[_CLIENT_VERSION_MAJOR._CLIENT_VERSION_MINOR._CLIENT_VERSION_BUILD],[https://gitlab.com/blackcoin/blackcoin-more],[blackcoin-more])
+define(_COPYRIGHT_HOLDERS_SUBSTITUTION,[[Quavence]])
+AC_INIT([Quavence],[_CLIENT_VERSION_MAJOR._CLIENT_VERSION_MINOR._CLIENT_VERSION_BUILD],[https://quavence.org],[quavence])
 AC_CONFIG_SRCDIR([src/main.cpp])
 AC_CONFIG_HEADERS([src/config/bitcoin-config.h])
 AC_CONFIG_AUX_DIR([build-aux])
@@ -18,10 +20,10 @@ if test "x$PKG_CONFIG" = x; then
   AC_MSG_ERROR([pkg-config not found])
 fi
 
-BITCOIN_DAEMON_NAME=blackmored
-BITCOIN_GUI_NAME=blackmore-qt
-BITCOIN_CLI_NAME=blackmore-cli
-BITCOIN_TX_NAME=blackmore-tx
+BITCOIN_DAEMON_NAME=quavenced
+BITCOIN_GUI_NAME=quavence-qt
+BITCOIN_CLI_NAME=quavence-cli
+BITCOIN_TX_NAME=quavence-tx
 
 dnl Unless the user specified ARFLAGS, force it to be cr
 AC_ARG_VAR(ARFLAGS, [Flags for the archiver, defaults to <cr> if not set])
@@ -498,19 +500,19 @@ CPPFLAGS="$CPPFLAGS -DHAVE_BUILD_INFO -D__STDC_FORMAT_MACROS"
 
 AC_ARG_WITH([utils],
   [AS_HELP_STRING([--with-utils],
-  [build blackmore-cli blackmore-tx (default=yes)])],
+  [build quavence-cli quavence-tx (default=yes)])],
   [build_bitcoin_utils=$withval],
   [build_bitcoin_utils=yes])
 
 AC_ARG_ENABLE([util-cli],
   [AS_HELP_STRING([--enable-util-cli],
-  [build blackmore-cli])],
+  [build quavence-cli])],
   [build_bitcoin_cli=$enableval],
   [build_bitcoin_cli=$build_bitcoin_utils])
 
 AC_ARG_ENABLE([util-tx],
   [AS_HELP_STRING([--enable-util-tx],
-  [build blackmore-tx])],
+  [build quavence-tx])],
   [build_bitcoin_tx=$enableval],
   [build_bitcoin_tx=$build_bitcoin_utils])
 
@@ -522,7 +524,7 @@ AC_ARG_WITH([libs],
 
 AC_ARG_WITH([daemon],
   [AS_HELP_STRING([--with-daemon],
-  [build blackmore daemon (default=yes)])],
+  [build quavence daemon (default=yes)])],
   [build_bitcoind=$withval],
   [build_bitcoind=yes])
 
@@ -860,7 +862,7 @@ AC_CHECK_DECLS([getifaddrs, freeifaddrs],[CHECK_SOCKET],,
 )
 AC_CHECK_DECLS([strnlen])
 
-dnl These are used for daemonization in blackmored
+dnl These are used for daemonization in quavenced
 AC_CHECK_DECLS([fork])
 AC_CHECK_DECLS([setsid])
 
@@ -1486,19 +1488,19 @@ AC_SUBST(UNIVALUE_CFLAGS)
 AC_SUBST(UNIVALUE_LIBS)
 
 
-AC_MSG_CHECKING([whether to build blackmored])
+AC_MSG_CHECKING([whether to build quavenced])
 AM_CONDITIONAL([BUILD_BITCOIND], [test x$build_bitcoind = xyes])
 AC_MSG_RESULT($build_bitcoind)
 
-AC_MSG_CHECKING([whether to build blackmore-cli])
+AC_MSG_CHECKING([whether to build quavence-cli])
 AM_CONDITIONAL([BUILD_BITCOIN_CLI], [test x$build_bitcoin_cli = xyes])
 AC_MSG_RESULT($build_bitcoin_cli)
 
-AC_MSG_CHECKING([whether to build blackmore-tx])
+AC_MSG_CHECKING([whether to build quavence-tx])
 AM_CONDITIONAL([BUILD_BITCOIN_TX], [test x$build_bitcoin_tx = xyes])
 AC_MSG_RESULT($build_bitcoin_tx)
 
-AC_MSG_CHECKING([whether to build utils (blackmore-cli blackmore-tx)])
+AC_MSG_CHECKING([whether to build utils (quavence-cli quavence-tx)])
 AM_CONDITIONAL([BUILD_BITCOIN_UTILS], [test x$build_bitcoin_utils = xyes])
 AC_MSG_RESULT($build_bitcoin_utils)
 
@@ -1764,6 +1766,9 @@ if test x$need_bundled_univalue = xyes; then
 fi
 
 ac_configure_args="${ac_configure_args} --disable-shared --with-pic --enable-benchmark=no --with-bignum=no --enable-module-recovery --enable-module-ecdh"
+if test -n "$host_alias" && test -n "$build_alias"; then
+  ac_configure_args="${ac_configure_args} --host=$host_alias --build=$build_alias"
+fi
 AC_CONFIG_SUBDIRS([src/secp256k1])
 
 AC_OUTPUT

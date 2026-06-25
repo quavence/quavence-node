@@ -1,1 +1,4 @@
 src/clientversion.cpp export-subst
+
+# Shell on Linux/WSL must use LF (avoid CRLF from Windows editors)
+contrib/*.sh text eol=lf

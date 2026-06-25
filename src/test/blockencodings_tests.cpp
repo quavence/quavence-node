@@ -32,7 +32,9 @@ static CBlock BuildBlockTestCase() {
     block.nVersion = 42;
     block.nTime = tx.nTime;
     block.hashPrevBlock = GetRandHash();
-    block.nBits = 0x207fffff;
+    // Must satisfy Params().GetConsensus().powLimit (regtest powLimit is stricter than
+    // mainnet-style 0x207fffff); otherwise CheckProofOfWork rejects nBits and nonce mining loops forever.
+    block.nBits = Params().GenesisBlock().nBits;
 
     tx.vin[0].prevout.hash = GetRandHash();
     tx.vin[0].prevout.n = 0;
@@ -48,7 +50,7 @@ static CBlock BuildBlockTestCase() {
     bool mutated;
     block.hashMerkleRoot = BlockMerkleRoot(block, &mutated);
     assert(!mutated);
-    while (!CheckProofOfWork(block.GetHash(), block.nBits, Params().GetConsensus())) ++block.nNonce;
+    while (!CheckProofOfWork(block.GetPoWHash(), block.nBits, Params().GetConsensus())) ++block.nNonce;
     return block;
 }
 
@@ -257,18 +259,21 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRoundTripTest)
     coinbase.vin[0].scriptSig.resize(10);
     coinbase.vout.resize(1);
     coinbase.vout[0].nValue = 42;
+    const int64_t blockTime = 1649194574;
+    coinbase.nTime = blockTime;
 
     CBlock block;
     block.vtx.resize(1);
     block.vtx[0] = coinbase;
     block.nVersion = 42;
+    block.nTime = blockTime;
     block.hashPrevBlock = GetRandHash();
-    block.nBits = 0x207fffff;
+    block.nBits = Params().GenesisBlock().nBits;
 
     bool mutated;
     block.hashMerkleRoot = BlockMerkleRoot(block, &mutated);
     assert(!mutated);
-    while (!CheckProofOfWork(block.GetHash(), block.nBits, Params().GetConsensus())) ++block.nNonce;
+    while (!CheckProofOfWork(block.GetPoWHash(), block.nBits, Params().GetConsensus())) ++block.nNonce;
 
     // Test simple header round-trip with only coinbase
     {

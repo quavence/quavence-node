@@ -4,6 +4,9 @@
 
 #include "guiutil.h"
 
+#include <QApplication>
+#include <QPalette>
+
 #include "bitcoinaddressvalidator.h"
 #include "bitcoinunits.h"
 #include "qvalidatedlineedit.h"
@@ -150,7 +153,7 @@ void setupAddressWidget(QValidatedLineEdit *widget, QWidget *parent)
 #if QT_VERSION >= 0x040700
     // We don't want translators to use own addresses in translations
     // and this is the only place, where this address is supplied.
-    widget->setPlaceholderText(QObject::tr("Enter a Bitcoin address (e.g. %1)")
+    widget->setPlaceholderText(QObject::tr("Enter a Quavence address (e.g. %1)")
                                    .arg(QString::fromStdString(DummyAddress(params, GetConfig()))));
 #endif
     widget->setValidator(new BitcoinAddressEntryValidator(params.CashAddrPrefix(), parent));
@@ -170,7 +173,7 @@ QString bitcoinURIScheme(const CChainParams &params, bool useCashAddr)
 {
     if (!useCashAddr)
     {
-        return "blackcoin";
+        return "quavence";
     }
     return QString::fromStdString(params.CashAddrPrefix());
 }
@@ -533,6 +536,16 @@ void SubstituteFonts(const QString& language)
 #endif
 }
 
+void InitBrandPalette()
+{
+    QPalette pal = QApplication::palette();
+    const QColor brandGold(212, 160, 23);
+    pal.setColor(QPalette::Highlight, brandGold);
+    pal.setColor(QPalette::HighlightedText, Qt::black);
+    pal.setColor(QPalette::Link, brandGold.darker(115));
+    QApplication::setPalette(pal);
+}
+
 ToolTipToRichTextFilter::ToolTipToRichTextFilter(int size_threshold, QObject *parent) :
     QObject(parent),
     size_threshold(size_threshold)
@@ -681,10 +694,10 @@ boost::filesystem::path static StartupShortcutPath()
 {
     std::string chain = ChainNameFromCommandLine();
     if (chain == CBaseChainParams::MAIN)
-        return GetSpecialFolderPath(CSIDL_STARTUP) / "Bitcoin.lnk";
-    if (chain == CBaseChainParams::TESTNET) // Remove this special case when CBaseChainParams::TESTNET = "testnet4"
-        return GetSpecialFolderPath(CSIDL_STARTUP) / "Bitcoin (testnet).lnk";
-    return GetSpecialFolderPath(CSIDL_STARTUP) / strprintf("Bitcoin (%s).lnk", chain);
+        return GetSpecialFolderPath(CSIDL_STARTUP) / "Quavence-Qt.lnk";
+    if (chain == CBaseChainParams::TESTNET)
+        return GetSpecialFolderPath(CSIDL_STARTUP) / "Quavence-Qt (testnet).lnk";
+    return GetSpecialFolderPath(CSIDL_STARTUP) / strprintf("Quavence-Qt (%s).lnk", chain);
 }
 
 bool GetStartOnSystemStartup()
@@ -781,8 +794,8 @@ boost::filesystem::path static GetAutostartFilePath()
 {
     std::string chain = ChainNameFromCommandLine();
     if (chain == CBaseChainParams::MAIN)
-        return GetAutostartDir() / "bitcoin.desktop";
-    return GetAutostartDir() / strprintf("bitcoin-%s.lnk", chain);
+        return GetAutostartDir() / "quavence-qt.desktop";
+    return GetAutostartDir() / strprintf("quavence-qt-%s.desktop", chain);
 }
 
 bool GetStartOnSystemStartup()
@@ -825,9 +838,9 @@ bool SetStartOnSystemStartup(bool fAutoStart)
         optionFile << "[Desktop Entry]\n";
         optionFile << "Type=Application\n";
         if (chain == CBaseChainParams::MAIN)
-            optionFile << "Name=Bitcoin\n";
+            optionFile << "Name=Quavence-Qt\n";
         else
-            optionFile << strprintf("Name=Bitcoin (%s)\n", chain);
+            optionFile << strprintf("Name=Quavence-Qt (%s)\n", chain);
         optionFile << "Exec=" << pszExePath << strprintf(" -min -testnet=%d -regtest=%d\n", GetBoolArg("-testnet", false), GetBoolArg("-regtest", false));
         optionFile << "Terminal=false\n";
         optionFile << "Hidden=false\n";

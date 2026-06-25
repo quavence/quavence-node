@@ -98,8 +98,8 @@ const int64_t nStartupTime = GetTime();
 
 using namespace std;
 
-const char * const BITCOIN_CONF_FILENAME = "blackmore.conf";
-const char * const BITCOIN_PID_FILENAME = "blackmored.pid";
+const char * const BITCOIN_CONF_FILENAME = "quavence.conf";
+const char * const BITCOIN_PID_FILENAME = "quavenced.pid";
 
 map<string, string> mapArgs;
 map<string, vector<string> > mapMultiArgs;
@@ -145,12 +145,9 @@ public:
         // that the config appears to have been loaded and there are no modules/engines available.
         OPENSSL_no_config();
 
-#ifdef WIN32
-        // Seed OpenSSL PRNG with current contents of the screen
-        RAND_screen();
-#endif
-
-        // Seed OpenSSL PRNG with performance counter
+        // Seed OpenSSL PRNG with performance counter.
+        // Do NOT call RAND_screen() here: it runs before main()/Qt, walks the
+        // Windows heap, and can block for a long time (looks like a hung exe).
         RandAddSeed();
     }
     ~CInit()
@@ -434,7 +431,7 @@ static std::string FormatException(const std::exception* pex, const char* pszThr
     char pszModule[MAX_PATH] = "";
     GetModuleFileNameA(NULL, pszModule, sizeof(pszModule));
 #else
-    const char* pszModule = "blackcoin";
+    const char* pszModule = "quavence";
 #endif
     if (pex)
         return strprintf(
@@ -454,13 +451,13 @@ void PrintExceptionContinue(const std::exception* pex, const char* pszThread)
 boost::filesystem::path GetDefaultDataDir()
 {
     namespace fs = boost::filesystem;
-    // Windows < Vista: C:\Documents and Settings\Username\Application Data\Blackmore
-    // Windows >= Vista: C:\Users\Username\AppData\Roaming\Blackmore
-    // Mac: ~/Library/Application Support/Blackmore
-    // Unix: ~/.blackmore
+    // Windows < Vista: C:\Documents and Settings\Username\Application Data\Quavence
+    // Windows >= Vista: C:\Users\Username\AppData\Roaming\Quavence
+    // Mac: ~/Library/Application Support/Quavence
+    // Unix: ~/.quavence
 #ifdef WIN32
     // Windows
-    return GetSpecialFolderPath(CSIDL_APPDATA) / "Blackmore";
+    return GetSpecialFolderPath(CSIDL_APPDATA) / "Quavence";
 #else
     fs::path pathRet;
     char* pszHome = getenv("HOME");
@@ -470,10 +467,10 @@ boost::filesystem::path GetDefaultDataDir()
         pathRet = fs::path(pszHome);
 #ifdef MAC_OSX
     // Mac
-    return pathRet / "Library/Application Support/Blackmore";
+    return pathRet / "Library/Application Support/Quavence";
 #else
     // Unix
-    return pathRet / ".blackmore";
+    return pathRet / ".quavence";
 #endif
 #endif
 }
@@ -525,6 +522,43 @@ boost::filesystem::path GetConfigFile()
         pathConfigFile = GetDataDir(false) / pathConfigFile;
 
     return pathConfigFile;
+}
+
+bool WriteDefaultConfigFile()
+{
+    const boost::filesystem::path pathConfig = GetConfigFile();
+    if (boost::filesystem::exists(pathConfig))
+        return false;
+
+    const boost::filesystem::path pathDir = pathConfig.parent_path();
+    if (!pathDir.empty())
+        TryCreateDirectory(pathDir);
+
+    static const char* const pszDefault =
+        "# Quavence configuration (created automatically on first run)\n"
+        "# Mainnet has no DNS seeds. Uncomment and set at least one peer (P2P port 27714).\n"
+        "\n"
+        "listen=1\n"
+        "maxconnections=32\n"
+        "\n"
+        "#connect=PEER_IP:27714\n"
+        "#addnode=PEER_IP:27714\n"
+        "\n"
+        "# RPC (optional; for quavence-cli; default port 27715)\n"
+        "#server=1\n"
+        "#rpcuser=\n"
+        "#rpcpassword=\n"
+        "#rpcallowip=127.0.0.1\n"
+        "\n";
+
+    boost::filesystem::ofstream stream(pathConfig, std::ios::out | std::ios::trunc);
+    if (!stream.good())
+        return false;
+    stream << pszDefault;
+    stream.flush();
+
+    LogPrintf("Created default configuration file %s\n", pathConfig.string());
+    return true;
 }
 
 void ReadConfigFile(map<string, string>& mapSettingsRet,
@@ -598,6 +632,23 @@ bool TryCreateDirectory(const boost::filesystem::path& p)
 
     // create_directory didn't create the directory, it had to have existed already
     return false;
+}
+
+bool EnsureDefaultDataDir()
+{
+    if (mapArgs.count("-datadir"))
+        return true;
+
+    const boost::filesystem::path path = GetDefaultDataDir();
+    if (path.empty())
+        return false;
+
+    try {
+        boost::filesystem::create_directories(path);
+        return boost::filesystem::is_directory(path);
+    } catch (const std::exception&) {
+        return false;
+    }
 }
 
 void FileCommit(FILE *fileout)
@@ -813,12 +864,10 @@ int GetNumCores()
 
 std::string CopyrightHolders(const std::string& strPrefix)
 {
-    std::string strCopyrightHolders =
-        strPrefix + "The Bitcoin Core developers" +
+    return strPrefix + "The Bitcoin Core developers" +
         "\n" + strPrefix + "The Blackcoin developers" +
-        "\n" + strPrefix + "The Blackcoin More developers";
-
-    return strCopyrightHolders;
+        "\n" + strPrefix + "The Blackcoin More developers" +
+        "\n" + strPrefix + "The Quavence developers";
 }
 
 // Obtain the application startup time (used for uptime calculation)

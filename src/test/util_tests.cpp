@@ -10,7 +10,10 @@
 #include <sync.h>
 #include <utilstrencodings.h>
 #include <utilmoneystr.h>
+#include <rpc/server.h>
 #include <test/test_bitcoin.h>
+
+#include <univalue.h>
 
 #include <stdint.h>
 #include <vector>
@@ -567,6 +570,28 @@ BOOST_AUTO_TEST_CASE(test_ParseFixedPoint)
     BOOST_CHECK(!ParseFixedPoint("1.1e", 8, &amount));
     BOOST_CHECK(!ParseFixedPoint("1.1e-", 8, &amount));
     BOOST_CHECK(!ParseFixedPoint("1.", 8, &amount));
+}
+
+BOOST_AUTO_TEST_CASE(rpc_parse_monetary_values)
+{
+    int64_t amount = 0;
+    BOOST_CHECK(ParseFixedPoint("0.00000001", 8, &amount));
+    BOOST_CHECK_EQUAL(amount, 1LL);
+    BOOST_CHECK(!ParseFixedPoint("0.000000001", 8, &amount));
+
+    UniValue val;
+    BOOST_REQUIRE(val.setNumStr("1.00000000"));
+    BOOST_CHECK_EQUAL(AmountFromValue(val), 100000000LL);
+
+    UniValue bad;
+    BOOST_REQUIRE(bad.setNumStr("-0.00000001"));
+    bool rejected = false;
+    try {
+        AmountFromValue(bad);
+    } catch (const UniValue&) {
+        rejected = true;
+    }
+    BOOST_CHECK(rejected);
 }
 
 template <int F, int T>

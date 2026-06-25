@@ -124,10 +124,14 @@ int RaiseFileDescriptorLimit(int nMinFD);
 void AllocateFileRange(FILE *file, unsigned int offset, unsigned int length);
 bool RenameOver(boost::filesystem::path src, boost::filesystem::path dest);
 bool TryCreateDirectory(const boost::filesystem::path& p);
+/** Create default data directory before Qt (no -datadir on command line). */
+bool EnsureDefaultDataDir();
 boost::filesystem::path GetDefaultDataDir();
 const boost::filesystem::path &GetDataDir(bool fNetSpecific = true);
 void ClearDatadirCache();
 boost::filesystem::path GetConfigFile();
+/** If quavence.conf is missing in the data directory, write a minimal template. */
+bool WriteDefaultConfigFile();
 #ifndef WIN32
 boost::filesystem::path GetPidFile();
 void CreatePidFile(const boost::filesystem::path &path, pid_t pid);
@@ -226,7 +230,7 @@ void RenameThread(const char* name);
  */
 template <typename Callable> void TraceThread(const char* name,  Callable func)
 {
-    std::string s = strprintf("blackcoin-more-%s", name);
+    std::string s = strprintf("quavence-more-%s", name);
     RenameThread(s.c_str());
     try
     {

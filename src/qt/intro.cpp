@@ -178,7 +178,28 @@ bool Intro::pickDataDirectory()
     /* 2) Allow QSettings to override default dir */
     dataDir = settings.value("strDataDir", dataDir).toString();
 
-    if(!fs::exists(GUIUtil::qstringToBoostPath(dataDir)) || GetBoolArg("-choosedatadir", DEFAULT_CHOOSE_DATADIR) || settings.value("fReset", false).toBool() || GetBoolArg("-resetguisettings", false))
+    const bool wantChooser = GetBoolArg("-choosedatadir", DEFAULT_CHOOSE_DATADIR)
+        || settings.value("fReset", false).toBool()
+        || GetBoolArg("-resetguisettings", false);
+
+    /* First run with default path: create %APPDATA%/Quavence without modal wizard.
+       The wizard is easy to miss (no splash yet) and looks like a hung process. */
+    if (!wantChooser && dataDir == getDefaultDataDirectory()) {
+        const fs::path path = GUIUtil::qstringToBoostPath(dataDir);
+        if (!fs::exists(path)) {
+            try {
+                fs::create_directories(path);
+            } catch (const fs::filesystem_error&) {
+                QMessageBox::critical(0, tr(PACKAGE_NAME),
+                    tr("Error: Specified data directory \"%1\" cannot be created.").arg(dataDir));
+                return false;
+            }
+        }
+        settings.setValue("strDataDir", dataDir);
+        return true;
+    }
+
+    if(!fs::exists(GUIUtil::qstringToBoostPath(dataDir)) || wantChooser)
     {
         /* If current default data directory does not exist, let the user choose one */
         Intro intro;

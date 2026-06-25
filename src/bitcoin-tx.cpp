@@ -58,10 +58,10 @@ static int AppInitRawTx(int argc, char* argv[])
     if (argc<2 || mapArgs.count("-?") || mapArgs.count("-h") || mapArgs.count("-help"))
     {
         // First part of help message is specific to this utility
-        std::string strUsage = strprintf(_("%s blackmore-tx utility version"), _(PACKAGE_NAME)) + " " + FormatFullVersion() + "\n\n" +
+        std::string strUsage = strprintf(_("%s quavence-tx utility version"), _(PACKAGE_NAME)) + " " + FormatFullVersion() + "\n\n" +
             _("Usage:") + "\n" +
-              "  blackmore-tx [options] <hex-tx> [commands]  " + _("Update hex-encoded blackcoin transaction") + "\n" +
-              "  blackmore-tx [options] -create [commands]   " + _("Create hex-encoded blackcoin transaction") + "\n" +
+              "  quavence-tx [options] <hex-tx> [commands]  " + _("Update hex-encoded quavence transaction") + "\n" +
+              "  quavence-tx [options] -create [commands]   " + _("Create hex-encoded quavence transaction") + "\n" +
               "\n";
 
         fprintf(stdout, "%s", strUsage.c_str());

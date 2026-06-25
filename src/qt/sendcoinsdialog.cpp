@@ -13,6 +13,7 @@
 #include "optionsmodel.h"
 #include "platformstyle.h"
 #include "sendcoinsentry.h"
+#include "splitforstakingdialog.h"
 #include "walletmodel.h"
 
 #include "coincontrol.h"
@@ -45,10 +46,12 @@ SendCoinsDialog::SendCoinsDialog(const PlatformStyle *platformStyle, QWidget *pa
         ui->addButton->setIcon(QIcon());
         ui->clearButton->setIcon(QIcon());
         ui->sendButton->setIcon(QIcon());
+        ui->splitForStakingButton->setIcon(QIcon());
     } else {
         ui->addButton->setIcon(platformStyle->SingleColorIcon(":/icons/add"));
         ui->clearButton->setIcon(platformStyle->SingleColorIcon(":/icons/remove"));
         ui->sendButton->setIcon(platformStyle->SingleColorIcon(":/icons/send"));
+        ui->splitForStakingButton->setIcon(platformStyle->SingleColorIcon(":/icons/send"));
     }
 
     GUIUtil::setupAddressWidget(ui->lineEditCoinControlChange, this);
@@ -335,6 +338,31 @@ void SendCoinsDialog::on_sendButton_clicked()
         coinControlUpdateLabels();
     }
     fNewRecipientAllowed = true;
+}
+
+void SendCoinsDialog::on_splitForStakingButton_clicked()
+{
+    if (!model)
+        return;
+
+    CCoinControl backup;
+    bool coinControlEnabled = model->getOptionsModel()->getCoinControlFeatures();
+    if (coinControlEnabled && CoinControlDialog::coinControl) {
+        backup = *CoinControlDialog::coinControl;
+    }
+
+    SplitForStakingDialog dlg(platformStyle, this);
+    dlg.setModel(model);
+    if (coinControlEnabled)
+        dlg.setCoinControlContext(true, CoinControlDialog::coinControl);
+    else
+        dlg.setCoinControlContext(false, NULL);
+    dlg.exec();
+
+    if (coinControlEnabled && CoinControlDialog::coinControl) {
+        *CoinControlDialog::coinControl = backup;
+        coinControlUpdateLabels();
+    }
 }
 
 void SendCoinsDialog::clear()

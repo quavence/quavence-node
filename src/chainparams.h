@@ -78,9 +78,11 @@ public:
     const CCheckpointData& Checkpoints() const { return checkpointData; }
     int LastPOWBlock() const { return consensus.nLastPOWBlock; }
     std::string GetDevFundAddress() const;
+    /** Dev-fee share of stake rewards (0–95). Network constant; not user-configurable. */
+    unsigned int DevFundDonationPercent() const { return nDevFundDonationPercent; }
     CScript GetDevRewardScript() const;
 protected:
-    CChainParams() {}
+    CChainParams() : nDevFundDonationPercent(0) {}
 
     Consensus::Params consensus;
     CMessageHeader::MessageStartChars pchMessageStart;
@@ -99,6 +101,7 @@ protected:
     bool fTestnetToBeDeprecatedFieldRPC;
     CCheckpointData checkpointData;
     std::vector<std::string> vDevFundAddress;
+    unsigned int nDevFundDonationPercent;
 };
 
 /**

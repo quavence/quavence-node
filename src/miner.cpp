@@ -26,7 +26,9 @@
 #include "util.h"
 #include "utilmoneystr.h"
 #include "validationinterface.h"
+#ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
+#endif
 
 #include <algorithm>
 #include <boost/thread.hpp>
@@ -573,6 +575,113 @@ void IncrementExtraNonce(CBlock* pblock, const CBlockIndex* pindexPrev, unsigned
     pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
 }
 
+#ifdef ENABLE_WALLET
+/**
+ * Background PoW bootstrap miner.
+ *
+ * Mines low-difficulty scrypt PoW blocks with **zero coinbase reward**
+ * (GetProofOfWorkSubsidy() returns 0 on mainnet) until tip reaches
+ * consensus.nLastPOWBlock. Then exits permanently. Single thread is enough
+ * for the genesis bootstrap window. Triggered by -bootstrapmineonstart=1.
+ */
+void ThreadPowBootstrapMiner(CWallet *pwallet, const CChainParams& chainparams)
+{
+    RenameThread("quavence-bootstrap-miner");
+    SetThreadPriority(THREAD_PRIORITY_LOWEST);
+
+    const Consensus::Params& consensusParams = chainparams.GetConsensus();
+    if (consensusParams.nLastPOWBlock <= 0) {
+        LogPrintf("Bootstrap miner: nLastPOWBlock=%d, nothing to do\n", consensusParams.nLastPOWBlock);
+        return;
+    }
+
+    LogPrintf("Bootstrap miner: starting (window 1..%d)\n", consensusParams.nLastPOWBlock);
+
+    CReserveKey reservekey(pwallet);
+
+    while (true)
+    {
+        boost::this_thread::interruption_point();
+
+        {
+            LOCK(cs_main);
+            if (chainActive.Height() >= consensusParams.nLastPOWBlock) {
+                LogPrintf("Bootstrap miner: window closed at height %d, stopping\n",
+                          chainActive.Height());
+                return;
+            }
+        }
+
+        while (pwallet->IsLocked()) {
+            MilliSleep(5000);
+            boost::this_thread::interruption_point();
+        }
+
+        // Need a coinbase script even though reward is zero (script is unspendable change).
+        CPubKey pubkey;
+        if (!reservekey.GetReservedKey(pubkey)) {
+            LogPrintf("Bootstrap miner: keypool empty, sleeping\n");
+            MilliSleep(10000);
+            continue;
+        }
+        CScript scriptCoinbase = GetScriptForDestination(pubkey.GetID());
+
+        std::unique_ptr<CBlockTemplate> pblocktemplate(
+            BlockAssembler(chainparams).CreateNewBlock(scriptCoinbase, nullptr, false));
+        if (!pblocktemplate.get()) {
+            reservekey.ReturnKey();
+            MilliSleep(1000);
+            continue;
+        }
+
+        CBlock *pblock = &pblocktemplate->block;
+        unsigned int nExtraNonce = 0;
+        {
+            LOCK(cs_main);
+            IncrementExtraNonce(pblock, chainActive.Tip(), nExtraNonce);
+        }
+
+        bool fFound = false;
+        const uint64_t kInnerLoop = 1ULL << 20;
+        for (uint64_t i = 0; i < kInnerLoop; ++i) {
+            if (CheckProofOfWork(pblock->GetPoWHash(), pblock->nBits, consensusParams)) {
+                fFound = true;
+                break;
+            }
+            ++pblock->nNonce;
+            if ((i & 0x3fff) == 0) {
+                boost::this_thread::interruption_point();
+                LOCK(cs_main);
+                if (chainActive.Tip()->GetBlockHash() != pblock->hashPrevBlock) {
+                    // Tip moved (e.g. PoS block arrived). Restart from new tip.
+                    break;
+                }
+                if (chainActive.Height() >= consensusParams.nLastPOWBlock) {
+                    LogPrintf("Bootstrap miner: window closed mid-iteration, stopping\n");
+                    reservekey.ReturnKey();
+                    return;
+                }
+            }
+        }
+
+        if (!fFound) {
+            reservekey.ReturnKey();
+            MilliSleep(100);
+            continue;
+        }
+
+        CValidationState state;
+        if (ProcessNewBlock(state, chainparams, NULL, pblock, true, NULL, false)) {
+            reservekey.KeepKey();
+            LogPrintf("Bootstrap miner: accepted PoW block %s\n", pblock->GetHash().GetHex());
+        } else {
+            reservekey.ReturnKey();
+            LogPrintf("Bootstrap miner: ProcessNewBlock rejected block\n");
+            MilliSleep(2000);
+        }
+    }
+}
+
 void ThreadStakeMiner(CWallet *pwallet, const CChainParams& chainparams)
 {
     SetThreadPriority(THREAD_PRIORITY_LOWEST);
@@ -641,3 +750,4 @@ void ThreadStakeMiner(CWallet *pwallet, const CChainParams& chainparams)
         MilliSleep(nMinerSleep);
     }
 }
+#endif // ENABLE_WALLET

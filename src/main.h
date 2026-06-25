@@ -54,7 +54,7 @@ static const bool DEFAULT_WHITELISTFORCERELAY = true;
 /** Minimum fee for transactions */
 static const unsigned int MIN_TX_FEE = 10000;
 /** Minimum fee per kB */
-static const unsigned int TX_FEE_PER_KB = 100000;
+static const unsigned int TX_FEE_PER_KB = 10000;
 /** Default for -minrelaytxfee, minimum relay fee for transactions */
 static const unsigned int DEFAULT_MIN_RELAY_TX_FEE = 10000;
 //! -maxtxfee default
@@ -285,7 +285,7 @@ bool GetTransaction(const uint256 &hash, CTransaction &tx, const Consensus::Para
 /** Find the best known block, and make it the tip of the block chain */
 bool ActivateBestChain(CValidationState& state, const CChainParams& chainparams, const CBlock* pblock = NULL);
 CAmount GetProofOfWorkSubsidy();
-CAmount GetProofOfStakeSubsidy();
+CAmount GetProofOfStakeSubsidy(int nHeight);
 
 /**
  * Prune block and undo files (blk???.dat and undo???.dat) so that the disk space used is less than a user-defined target.
@@ -482,9 +482,11 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
  *  of problems. Note that in any case, coins may be modified. */
 bool DisconnectBlock(const CBlock& block, CValidationState& state, const CBlockIndex* pindex, CCoinsViewCache& coins, bool* pfClean = NULL);
 
-/** Proof-of-stake checks */
+/** Proof-of-stake checks (wallet-backed staking only) */
+#ifdef ENABLE_WALLET
 bool CheckStake(CBlock* pblock, CWallet& wallet, const CChainParams& chainparams);
 bool SignBlock(CBlock& block, CWallet& wallet, int64_t& nFees);
+#endif
 
 // peercoin: minimum fee for transaction to be accepted in a blockchain.
 CAmount GetMinFee(const CTransaction& tx, unsigned int nTimeTx);

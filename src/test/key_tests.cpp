@@ -19,14 +19,10 @@
 
 using namespace std;
 
-static const std::string strSecret1 = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
-static const std::string strSecret2 = "5KC4ejrDjv152FGwP386VD1i2NYc5KkfSMyv1nGy1VGDxGHqVY3";
-static const std::string strSecret1C = "Kwr371tjA9u2rFSMZjTNun2PXXP3WPZu2afRHTcta6KxEUdm1vEw";
-static const std::string strSecret2C = "L3Hq7a8FEQwJkW1M2GNKDW28546Vp5miewcCzSqUD9kCAXrJdS3g";
-static const std::string addr1 = "1QFqqMUD55ZV3PJEJZtaKCsQmjLT6JkjvJ";
-static const std::string addr2 = "1F5y5E5FMc5YzdJtB9hLaUe43GDxEKXENJ";
-static const std::string addr1C = "1NoJrossxPBKfCHuJXT4HadJrXRE9Fxiqs";
-static const std::string addr2C = "1CRj2HyM1CXWzHAXLQtiGLyggNT9WQqsDs";
+static const std::string strSecret1 = "7UJuPzqyzMVYJsbGyZehvweAg9FpymuNSDVkRTzZHMgvbJ2dqqE";
+static const std::string strSecret2 = "7VYT7p2J8Zxnna3nJiU3V3z3YnaHL6XaauausWzEd5hS2fGDDVx";
+static const std::string strSecret1C = "VZY2GWKCY9SyBtJHWf7Rf6B3hmSSmbC9cJ9tez93VCKDXzY5eVdJ";
+static const std::string strSecret2C = "VeypH4YicQVF68sGyC2MxpAnFJ9u5HPyEf6gMyMd8FjTU3rzC9X6";
 
 static const std::string strAddressBad = "1HV9Lc3sNHZxwj4Zk6fB38tEmBryq2cBiF";
 
@@ -103,10 +99,15 @@ BOOST_AUTO_TEST_CASE(key_test1)
     BOOST_CHECK(!key2C.VerifyPubKey(pubkey2));
     BOOST_CHECK(key2C.VerifyPubKey(pubkey2C));
 
-    BOOST_CHECK(DecodeDestination(addr1) == CTxDestination(pubkey1.GetID()));
-    BOOST_CHECK(DecodeDestination(addr2) == CTxDestination(pubkey2.GetID()));
-    BOOST_CHECK(DecodeDestination(addr1C) == CTxDestination(pubkey1C.GetID()));
-    BOOST_CHECK(DecodeDestination(addr2C) == CTxDestination(pubkey2C.GetID()));
+    const CChainParams &params = Params();
+    BOOST_CHECK(DecodeDestination(EncodeDestination(CTxDestination(pubkey1.GetID())), params) ==
+                CTxDestination(pubkey1.GetID()));
+    BOOST_CHECK(DecodeDestination(EncodeDestination(CTxDestination(pubkey2.GetID())), params) ==
+                CTxDestination(pubkey2.GetID()));
+    BOOST_CHECK(DecodeDestination(EncodeDestination(CTxDestination(pubkey1C.GetID())), params) ==
+                CTxDestination(pubkey1C.GetID()));
+    BOOST_CHECK(DecodeDestination(EncodeDestination(CTxDestination(pubkey2C.GetID())), params) ==
+                CTxDestination(pubkey2C.GetID()));
 
     for (int n=0; n<16; n++)
     {

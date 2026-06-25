@@ -81,6 +81,7 @@ BITCOIN_TESTS =\
   test/script_P2SH_tests.cpp \
   test/scriptnum_tests.cpp \
   test/serialize_tests.cpp \
+  test/subsidy_schedule_tests.cpp \
   test/sigopcount_tests.cpp \
   test/skiplist_tests.cpp \
   test/streams_tests.cpp \

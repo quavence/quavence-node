@@ -30,9 +30,20 @@ static arith_uint256 GetTargetLimit(int64_t nTime, const Consensus::Params& para
 
 unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params, bool fProofOfStake)
 {
-    // Genesis block
-    if (pindexLast == NULL)
+    if (pindexLast == NULL) {
+        /** Pre-chain templates; mainnet optionally uses bootstrap easy bits for genesis-era PoW helpers. */
+        if (!fProofOfStake && params.nPowBootstrapCompactTarget != 0)
+            return params.nPowBootstrapCompactTarget;
         return UintToArith256(params.powLimit).GetCompact();
+    }
+
+    const int nNextHeight = pindexLast->nHeight + 1;
+
+    /** Fixed easy PoW difficulty for bootstrap window heights 1..nLastPOWBlock — keeps CPU mining predictable. PoS unaffected. */
+    if (!fProofOfStake && params.nPowBootstrapCompactTarget != 0
+        && nNextHeight >= 1 && nNextHeight <= params.nLastPOWBlock) {
+        return params.nPowBootstrapCompactTarget;
+    }
 
     const CBlockIndex* pindexPrev = GetLastBlockIndex(pindexLast, fProofOfStake);
     unsigned int nTargetLimit = GetTargetLimit(pindexLast->GetBlockTime(), params, fProofOfStake).GetCompact();
@@ -77,23 +88,4 @@ unsigned int CalculateNextTargetRequired(const CBlockIndex* pindexLast, int64_t 
         bnNew = bnTargetLimit;
 
     return bnNew.GetCompact();
-}
-
-bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params& params)
-{
-    bool fNegative;
-    bool fOverflow;
-    arith_uint256 bnTarget;
-
-    bnTarget.SetCompact(nBits, &fNegative, &fOverflow);
-
-    // Check range
-    if (fNegative || bnTarget == 0 || fOverflow || bnTarget > UintToArith256(params.powLimit))
-        return false;
-
-    // Check proof of work matches claimed amount
-    if (UintToArith256(hash) > bnTarget)
-        return false;
-
-    return true;
 }
