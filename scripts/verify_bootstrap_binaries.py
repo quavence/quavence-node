@@ -27,6 +27,7 @@ REQUIRED_ADMIN_STRINGS = (
 
 REQUIRED_ADMIN_SYMBOLS = (
     "generatebootstrap",
+    "ThreadPowBootstrapMiner",
 )
 
 

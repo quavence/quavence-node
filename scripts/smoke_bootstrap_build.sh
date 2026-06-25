@@ -5,6 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIG="${BITCOIN_CONFIG:-$ROOT/src/config/bitcoin-config.h}"
 EXPECT="${QVNC_EXPECT_BOOTSTRAP_TOOLS:?set QVNC_EXPECT_BOOTSTRAP_TOOLS to 0 or 1}"
+PYTHON="${PYTHON:-python3}"
 
 fail() {
   echo "smoke_bootstrap_build: FAIL — $*" >&2
@@ -54,16 +55,10 @@ if [[ -n "$CLI" ]]; then
 fi
 
 DAEMON="${QUAVENCED:-}"
-if [[ -n "$DAEMON" && -x "$DAEMON" ]] && command -v nm >/dev/null 2>&1; then
-  if nm -C "$DAEMON" 2>/dev/null | grep -q 'generatebootstrap'; then
-    sym=1
-  else
-    sym=0
-  fi
-  if [[ "$sym" != "$EXPECT" ]]; then
-    fail "binary symbol check: expected bootstrap RPC compiled=$EXPECT, nm found=$sym"
-  fi
-  echo "binary symbols: bootstrap RPC compiled=$sym (ok)"
+if [[ -n "$DAEMON" && -x "$DAEMON" ]]; then
+  variant=public
+  [[ "$EXPECT" == "1" ]] && variant=admin
+  "$PYTHON" "$ROOT/scripts/verify_bootstrap_binaries.py" "$variant" "$DAEMON"
 fi
 
 echo "smoke_bootstrap_build: OK (expect=$EXPECT)"
