@@ -8,6 +8,7 @@
 #include <QDialog>
 
 class AddressTableModel;
+class Config;
 class OptionsModel;
 class PlatformStyle;
 
@@ -44,6 +45,7 @@ public:
     ~AddressBookPage();
 
     void setModel(AddressTableModel *model);
+    void setReceiveDialogContext(const Config *cfg, OptionsModel *optionsModel);
     const QString &getReturnValue() const { return returnValue; }
 
 public Q_SLOTS:
@@ -59,6 +61,8 @@ private:
     QMenu *contextMenu;
     QAction *deleteAction; // to be able to explicitly disable it
     QString newAddressToSelect;
+    const Config *receiveCfg;
+    OptionsModel *optionsModel;
 
 private Q_SLOTS:
     /** Delete currently selected address entry */
@@ -67,6 +71,8 @@ private Q_SLOTS:
     void on_newAddress_clicked();
     /** Copy address of currently selected address entry to clipboard */
     void on_copyAddress_clicked();
+    /** Show QR code for the selected receiving address */
+    void on_showQr_clicked();
     /** Copy label of currently selected address entry to clipboard (no button) */
     void onCopyLabelAction();
     /** Edit currently selected address entry (no button) */

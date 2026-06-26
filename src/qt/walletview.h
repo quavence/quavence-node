@@ -70,6 +70,7 @@ private:
 
     QProgressDialog *progressDialog;
     const PlatformStyle *platformStyle;
+    const Config *cfg;
 
 public Q_SLOTS:
     /** Switch to overview (home) page */

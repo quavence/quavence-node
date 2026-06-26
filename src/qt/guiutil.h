@@ -56,6 +56,8 @@ namespace GUIUtil
     bool parseBitcoinURI(const QString &scheme, const QUrl &uri, SendCoinsRecipient *out);
     bool parseBitcoinURI(const QString &scheme, QString uri, SendCoinsRecipient *out);
     QString formatBitcoinURI(const Config &cfg, const SendCoinsRecipient &info);
+    /** qvnc: URI for mobile deposit QR codes (miniapp scanner). */
+    QString formatQvncDepositURI(const QString &address);
 
     // Returns true if given address+amount meets "dust" definition
     bool isDust(const QString& address, const CAmount& amount);

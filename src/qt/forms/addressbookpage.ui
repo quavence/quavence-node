@@ -86,6 +86,23 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="showQr">
+       <property name="toolTip">
+        <string>Show a QR code for the selected address (qvnc: URI for mobile)</string>
+       </property>
+       <property name="text">
+        <string>Show &amp;QR</string>
+       </property>
+       <property name="icon">
+        <iconset resource="../bitcoin.qrc">
+         <normaloff>:/icons/receiving_addresses</normaloff>:/icons/receiving_addresses</iconset>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="deleteAddress">
        <property name="toolTip">
         <string>Delete the currently selected address from the list</string>

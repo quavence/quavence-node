@@ -55,8 +55,14 @@ public:
     explicit ReceiveRequestDialog(const Config *cfg, QWidget *parent = 0);
     ~ReceiveRequestDialog();
 
+    enum QrUriMode {
+        PaymentRequestUri,
+        QvncDepositUri,
+    };
+
     void setModel(OptionsModel *model);
     void setInfo(const SendCoinsRecipient &info);
+    void setQrUriMode(QrUriMode mode);
 
 private Q_SLOTS:
     void on_btnCopyURI_clicked();
@@ -69,6 +75,7 @@ private:
     OptionsModel *model;
     SendCoinsRecipient info;
     const Config *cfg;
+    QrUriMode qrUriMode;
 };
 
 // exported for unittesting

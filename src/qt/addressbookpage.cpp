@@ -14,7 +14,10 @@
 #include "csvmodelwriter.h"
 #include "editaddressdialog.h"
 #include "guiutil.h"
+#include "optionsmodel.h"
 #include "platformstyle.h"
+#include "receiverequestdialog.h"
+#include "walletmodel.h"
 
 #include <QIcon>
 #include <QMenu>
@@ -26,18 +29,22 @@ AddressBookPage::AddressBookPage(const PlatformStyle *platformStyle, Mode mode, 
     ui(new Ui::AddressBookPage),
     model(0),
     mode(mode),
-    tab(tab)
+    tab(tab),
+    receiveCfg(0),
+    optionsModel(0)
 {
     ui->setupUi(this);
 
     if (!platformStyle->getImagesOnButtons()) {
         ui->newAddress->setIcon(QIcon());
         ui->copyAddress->setIcon(QIcon());
+        ui->showQr->setIcon(QIcon());
         ui->deleteAddress->setIcon(QIcon());
         ui->exportButton->setIcon(QIcon());
     } else {
         ui->newAddress->setIcon(platformStyle->SingleColorIcon(":/icons/add"));
         ui->copyAddress->setIcon(platformStyle->SingleColorIcon(":/icons/editcopy"));
+        ui->showQr->setIcon(platformStyle->SingleColorIcon(":/icons/receiving_addresses"));
         ui->deleteAddress->setIcon(platformStyle->SingleColorIcon(":/icons/remove"));
         ui->exportButton->setIcon(platformStyle->SingleColorIcon(":/icons/export"));
     }
@@ -69,10 +76,12 @@ AddressBookPage::AddressBookPage(const PlatformStyle *platformStyle, Mode mode, 
     case SendingTab:
         ui->labelExplanation->setText(tr("These are your Bitcoin addresses for sending payments. Always check the amount and the receiving address before sending coins."));
         ui->deleteAddress->setVisible(true);
+        ui->showQr->setVisible(false);
         break;
     case ReceivingTab:
         ui->labelExplanation->setText(tr("These are your Bitcoin addresses for receiving payments. It is recommended to use a new receiving address for each transaction."));
         ui->deleteAddress->setVisible(false);
+        ui->showQr->setVisible(mode == ForEditing);
         break;
     }
 
@@ -100,6 +109,9 @@ AddressBookPage::AddressBookPage(const PlatformStyle *platformStyle, Mode mode, 
     connect(ui->tableView, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(contextualMenu(QPoint)));
 
     connect(ui->closeButton, SIGNAL(clicked()), this, SLOT(accept()));
+
+    ui->showQr->setVisible(tab == ReceivingTab && mode == ForEditing);
+    ui->showQr->setEnabled(false);
 }
 
 AddressBookPage::~AddressBookPage()
@@ -152,9 +164,37 @@ void AddressBookPage::setModel(AddressTableModel *model)
     selectionChanged();
 }
 
+void AddressBookPage::setReceiveDialogContext(const Config *cfg, OptionsModel *optionsModel)
+{
+    receiveCfg = cfg;
+    this->optionsModel = optionsModel;
+}
+
 void AddressBookPage::on_copyAddress_clicked()
 {
     GUIUtil::copyEntryData(ui->tableView, AddressTableModel::Address);
+}
+
+void AddressBookPage::on_showQr_clicked()
+{
+    if (!receiveCfg || !optionsModel || !ui->tableView->selectionModel())
+        return;
+
+    QModelIndexList indexes = ui->tableView->selectionModel()->selectedRows(AddressTableModel::Address);
+    if (indexes.isEmpty())
+        return;
+
+    const QString address = indexes.at(0).data(Qt::EditRole).toString();
+    const QModelIndex labelIndex = indexes.at(0).sibling(indexes.at(0).row(), AddressTableModel::Label);
+    const QString label = labelIndex.data(Qt::EditRole).toString();
+
+    SendCoinsRecipient info(address, label, 0, "");
+    ReceiveRequestDialog *dialog = new ReceiveRequestDialog(receiveCfg, this);
+    dialog->setQrUriMode(ReceiveRequestDialog::QvncDepositUri);
+    dialog->setModel(optionsModel);
+    dialog->setInfo(info);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->show();
 }
 
 void AddressBookPage::onCopyLabelAction()
@@ -237,11 +277,14 @@ void AddressBookPage::selectionChanged()
             break;
         }
         ui->copyAddress->setEnabled(true);
+        if (tab == ReceivingTab && mode == ForEditing)
+            ui->showQr->setEnabled(true);
     }
     else
     {
         ui->deleteAddress->setEnabled(false);
         ui->copyAddress->setEnabled(false);
+        ui->showQr->setEnabled(false);
     }
 }
 

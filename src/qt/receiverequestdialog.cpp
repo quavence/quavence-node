@@ -97,7 +97,8 @@ ReceiveRequestDialog::ReceiveRequestDialog(const Config *cfg, QWidget *parent) :
     QDialog(parent),
     ui(new Ui::ReceiveRequestDialog),
     model(0),
-    cfg(cfg)
+    cfg(cfg),
+    qrUriMode(PaymentRequestUri)
 {
     ui->setupUi(this);
 
@@ -148,6 +149,12 @@ void ReceiveRequestDialog::setInfo(const SendCoinsRecipient &_info)
     update();
 }
 
+void ReceiveRequestDialog::setQrUriMode(QrUriMode mode)
+{
+    qrUriMode = mode;
+    update();
+}
+
 void ReceiveRequestDialog::update()
 {
     if(!model)
@@ -155,16 +162,30 @@ void ReceiveRequestDialog::update()
     QString target = info.label;
     if(target.isEmpty())
         target = info.address;
-    setWindowTitle(tr("Request payment to %1").arg(target));
 
-    QString uri = GUIUtil::formatBitcoinURI(*cfg, info);
+    const QString desktopUri = GUIUtil::formatBitcoinURI(*cfg, info);
+    const QString qrUri = qrUriMode == QvncDepositUri
+        ? GUIUtil::formatQvncDepositURI(info.address)
+        : desktopUri;
+
+    if (qrUriMode == QvncDepositUri) {
+        setWindowTitle(tr("Show QR for %1").arg(target));
+    } else {
+        setWindowTitle(tr("Request payment to %1").arg(target));
+    }
+
     ui->btnSaveAs->setEnabled(false);
     QString html;
     html += "<html><font face='verdana, arial, helvetica, sans-serif'>";
     html += "<b>"+tr("Payment information")+"</b><br>";
-    html += "<b>"+tr("URI")+"</b>: ";
-    html += "<a href=\""+uri+"\">" + GUIUtil::HtmlEscape(uri) + "</a><br>";
-    html += "<b>"+tr("Address")+"</b>: " + GUIUtil::HtmlEscape(info.address) + "<br>";
+    if (qrUriMode == QvncDepositUri) {
+        html += "<b>"+tr("Address")+"</b>: " + GUIUtil::HtmlEscape(info.address) + "<br>";
+        html += "<b>"+tr("QR payload")+"</b>: " + GUIUtil::HtmlEscape(qrUri) + "<br>";
+    } else {
+        html += "<b>"+tr("URI")+"</b>: ";
+        html += "<a href=\""+desktopUri+"\">" + GUIUtil::HtmlEscape(desktopUri) + "</a><br>";
+        html += "<b>"+tr("Address")+"</b>: " + GUIUtil::HtmlEscape(info.address) + "<br>";
+    }
     if(info.amount)
         html += "<b>"+tr("Amount")+"</b>: " + BitcoinUnits::formatHtmlWithUnit(model->getDisplayUnit(), info.amount) + "<br>";
     if(!info.label.isEmpty())
@@ -177,14 +198,14 @@ void ReceiveRequestDialog::update()
     int fontSize = cfg->UseCashAddrEncoding() ? 10 : 12;
 
     ui->lblQRCode->setText("");
-    if(!uri.isEmpty())
+    if(!qrUri.isEmpty())
     {
         // limit URI length
-        if (uri.length() > MAX_URI_LENGTH)
+        if (qrUri.length() > MAX_URI_LENGTH)
         {
             ui->lblQRCode->setText(tr("Resulting URI too long, try to reduce the text for label / message."));
         } else {
-            QRcode *code = QRcode_encodeString(uri.toUtf8().constData(), 0, QR_ECLEVEL_L, QR_MODE_8, 1);
+            QRcode *code = QRcode_encodeString(qrUri.toUtf8().constData(), 0, QR_ECLEVEL_L, QR_MODE_8, 1);
             if (!code)
             {
                 ui->lblQRCode->setText(tr("Error encoding URI into QR Code."));
@@ -224,7 +245,11 @@ void ReceiveRequestDialog::update()
 
 void ReceiveRequestDialog::on_btnCopyURI_clicked()
 {
-    GUIUtil::setClipboard(GUIUtil::formatBitcoinURI(*cfg, info));
+    if (qrUriMode == QvncDepositUri) {
+        GUIUtil::setClipboard(GUIUtil::formatQvncDepositURI(info.address));
+    } else {
+        GUIUtil::setClipboard(GUIUtil::formatBitcoinURI(*cfg, info));
+    }
 }
 
 void ReceiveRequestDialog::on_btnCopyAddress_clicked()
