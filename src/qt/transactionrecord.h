@@ -94,13 +94,14 @@ public:
     static const int RecommendedNumConfirmations = 10;
 
     TransactionRecord():
-            hash(), time(0), type(Other), address(""), debit(0), credit(0), idx(0)
+            hash(), time(0), type(Other), address(""), debit(0), credit(0), idx(0),
+            isStakeReward(false)
     {
     }
 
     TransactionRecord(uint256 hash, qint64 time):
             hash(hash), time(time), type(Other), address(""), debit(0),
-            credit(0), idx(0)
+            credit(0), idx(0), isStakeReward(false)
     {
     }
 
@@ -108,7 +109,7 @@ public:
                 Type type, const std::string &address,
                 const CAmount& debit, const CAmount& credit):
             hash(hash), time(time), type(type), address(address), debit(debit), credit(credit),
-            idx(0)
+            idx(0), isStakeReward(false)
     {
     }
 
@@ -135,6 +136,9 @@ public:
 
     /** Whether the transaction was sent/received with a watch-only address */
     bool involvesWatchAddress;
+
+    /** True for decomposed coinstake net-reward rows (Generated type). */
+    bool isStakeReward;
 
     /** Return the unique identifier for this transaction (part) */
     QString getTxID() const;

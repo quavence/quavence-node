@@ -2712,6 +2712,14 @@
         <translation>Незрелый (%1 подтверждений, будет доступно после %2)</translation>
     </message>
     <message>
+        <source>Stake reward pending confirmations (%1 of %2)</source>
+        <translation>Награда за стейкинг ожидает подтверждений (%1 из %2)</translation>
+    </message>
+    <message>
+        <source>Stake reward conflicted or orphaned</source>
+        <translation>Награда за стейкинг в конфликте или сиротская</translation>
+    </message>
+    <message>
         <source>This block was not received by any other nodes and will probably not be accepted!</source>
         <translation>Этот блок не был получен другими узлами и, возможно, не будет принят!</translation>
     </message>

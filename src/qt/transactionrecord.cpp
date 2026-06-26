@@ -68,6 +68,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
                 TransactionRecord sub(hash, nTime);
                 sub.idx = parts.size();
                 sub.type = TransactionRecord::Generated;
+                sub.isStakeReward = true;
                 // For coinstake, display only net minted reward in transaction lists:
                 // reward = total credit to wallet - total debit from wallet.
                 // Showing full returned stake output is misleading in UI.
@@ -243,8 +244,11 @@ void TransactionRecord::updateStatus(const CWalletTx &wtx)
             {
                 status.matures_in = wtx.GetBlocksToMaturity();
 
-                // Check if the block was requested by anyone
-                if (GetAdjustedTime() - wtx.nTimeReceived > 2 * 60 && wtx.GetRequestCount() == 0)
+                // Locally minted PoS rewards are often not relay-requested; keep Immature
+                // instead of MaturesWarning (misleading "?" status icon in the UI).
+                if (!wtx.IsCoinStake()
+                    && GetAdjustedTime() - wtx.nTimeReceived > 2 * 60
+                    && wtx.GetRequestCount() == 0)
                     status.status = TransactionStatus::MaturesWarning;
             }
             else

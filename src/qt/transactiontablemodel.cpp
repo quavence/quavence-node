@@ -28,6 +28,19 @@
 
 #include <boost/foreach.hpp>
 
+namespace {
+
+QIcon immatureProgressIcon(int depth, int maturesIn)
+{
+    const int total = depth + maturesIn;
+    if (total <= 0)
+        return QIcon(":/icons/transaction_1");
+    const int part = qBound(1, static_cast<int>(depth * 4 / total) + 1, 5);
+    return QIcon(QString(":/icons/transaction_%1").arg(part));
+}
+
+} // namespace
+
 // Amount column is right-aligned it contains numbers
 static int column_alignments[] = {
         Qt::AlignLeft|Qt::AlignVCenter, /* status */
@@ -331,13 +344,26 @@ QString TransactionTableModel::formatTxStatus(const TransactionRecord *wtx) cons
         status = tr("Conflicted");
         break;
     case TransactionStatus::Immature:
-        status = tr("Immature (%1 confirmations, will be available after %2)").arg(wtx->status.depth).arg(wtx->status.depth + wtx->status.matures_in);
+        if (wtx->isStakeReward)
+            status = tr("Stake reward pending confirmations (%1 of %2)")
+                         .arg(wtx->status.depth)
+                         .arg(wtx->status.depth + wtx->status.matures_in);
+        else
+            status = tr("Immature (%1 confirmations, will be available after %2)").arg(wtx->status.depth).arg(wtx->status.depth + wtx->status.matures_in);
         break;
     case TransactionStatus::MaturesWarning:
-        status = tr("This block was not received by any other nodes and will probably not be accepted!");
+        if (wtx->isStakeReward)
+            status = tr("Stake reward pending confirmations (%1 of %2)")
+                         .arg(wtx->status.depth)
+                         .arg(wtx->status.depth + wtx->status.matures_in);
+        else
+            status = tr("This block was not received by any other nodes and will probably not be accepted!");
         break;
     case TransactionStatus::NotAccepted:
-        status = tr("Generated but not accepted");
+        if (wtx->isStakeReward)
+            status = tr("Stake reward conflicted or orphaned");
+        else
+            status = tr("Generated but not accepted");
         break;
     }
 
@@ -516,13 +542,15 @@ QVariant TransactionTableModel::txStatusDecoration(const TransactionRecord *wtx)
         return QIcon(":/icons/transaction_confirmed");
     case TransactionStatus::Conflicted:
         return QIcon(":/icons/transaction_conflicted");
-    case TransactionStatus::Immature: {
-        int total = wtx->status.depth + wtx->status.matures_in;
-        int part = (wtx->status.depth * 4 / total) + 1;
-        return QIcon(QString(":/icons/transaction_%1").arg(part));
-        }
+    case TransactionStatus::Immature:
+        return immatureProgressIcon(wtx->status.depth, wtx->status.matures_in);
     case TransactionStatus::MaturesWarning:
+        if (wtx->isStakeReward)
+            return immatureProgressIcon(wtx->status.depth, wtx->status.matures_in);
+        return QIcon(":/icons/transaction_0");
     case TransactionStatus::NotAccepted:
+        if (wtx->isStakeReward)
+            return QIcon(":/icons/transaction_conflicted");
         return QIcon(":/icons/transaction_0");
     default:
         return COLOR_BLACK;
