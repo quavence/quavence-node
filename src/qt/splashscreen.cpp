@@ -75,16 +75,24 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     QRect rGradient(QPoint(0,0), splashSize);
     pixPaint.fillRect(rGradient, gradient);
 
-    // App icon (left); PNG should be square with transparent background
+    // App icon (left): Logo2 brand on splash; Logo5 tray/window icon stays in NetworkStyle.
     const int splashW = pixmap.width() / devicePixelRatio;
     const int textLeft = iconAreaWidth + 10;
     const int textWidth = splashW - textLeft - paddingRight;
 
     const QSize iconSize(180 * devicePixelRatio, 180 * devicePixelRatio);
-    QPixmap icon(networkStyle->getAppIcon().pixmap(iconSize));
-    icon.setDevicePixelRatio(devicePixelRatio);
+    QPixmap iconPixmap(":/icons/quavence-brand");
+    if (iconPixmap.isNull()) {
+        iconPixmap = networkStyle->getAppIcon().pixmap(iconSize);
+    } else {
+        iconPixmap = iconPixmap.scaled(
+            iconSize,
+            Qt::KeepAspectRatio,
+            Qt::SmoothTransformation);
+    }
+    iconPixmap.setDevicePixelRatio(devicePixelRatio);
     const int iconX = (iconAreaWidth - 180) / 2;
-    pixPaint.drawPixmap(iconX, 72, 180, 180, icon);
+    pixPaint.drawPixmap(iconX, 72, 180, 180, iconPixmap);
 
     // Title and version (right column)
     pixPaint.setFont(QFont(font, 33*fontFactor));
