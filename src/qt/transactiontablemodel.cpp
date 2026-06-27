@@ -424,15 +424,15 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     switch(wtx->type)
     {
     case TransactionRecord::Generated:
-        return QIcon(":/icons/tx_mined");
+        return GUIUtil::txTypeDotIcon(COLOR_BRAND_PRIMARY);
     case TransactionRecord::RecvWithAddress:
     case TransactionRecord::RecvFromOther:
-        return QIcon(":/icons/tx_input");
+        return GUIUtil::txTypeDotIcon(COLOR_TX_INCOMING);
     case TransactionRecord::SendToAddress:
     case TransactionRecord::SendToOther:
-        return QIcon(":/icons/tx_output");
+        return GUIUtil::txTypeDotIcon(COLOR_BRAND_MUTED);
     default:
-        return QIcon(":/icons/tx_inout");
+        return GUIUtil::txTypeDotIcon(COLOR_BRAND_BORDER);
     }
 }
 
@@ -591,13 +591,16 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
             return txStatusDecoration(rec);
         case Watchonly:
             return txWatchonlyDecoration(rec);
-        case ToAddress:
+        case Type:
             return txAddressDecoration(rec);
         }
         break;
     case Qt::DecorationRole:
     {
-        QIcon icon = qvariant_cast<QIcon>(index.data(RawDecorationRole));
+        const QVariant raw = index.data(RawDecorationRole);
+        if (index.column() == Type && raw.canConvert<QIcon>())
+            return raw;
+        QIcon icon = qvariant_cast<QIcon>(raw);
         return platformStyle->TextColorIcon(icon);
     }
     case Qt::DisplayRole:

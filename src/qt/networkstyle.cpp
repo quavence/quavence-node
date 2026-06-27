@@ -21,6 +21,16 @@ static const struct {
 };
 static const unsigned network_styles_count = sizeof(network_styles)/sizeof(*network_styles);
 
+static QIcon buildMultiSizeIcon(const QPixmap &pixmap)
+{
+    QIcon icon;
+    const int sizes[] = {16, 20, 24, 32, 48, 64, 128, 256};
+    for (int size : sizes) {
+        icon.addPixmap(pixmap.scaled(QSize(size, size), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    }
+    return icon;
+}
+
 // titleAddText needs to be const char* for tr()
 NetworkStyle::NetworkStyle(const QString &appName, const int iconColorHueShift, const int iconColorSaturationReduction, const char *titleAddText):
     appName(appName),
@@ -75,8 +85,8 @@ NetworkStyle::NetworkStyle(const QString &appName, const int iconColorHueShift, 
 #endif
     }
 
-    appIcon             = QIcon(pixmap);
-    trayAndWindowIcon   = QIcon(pixmap.scaled(QSize(256,256)));
+    appIcon             = buildMultiSizeIcon(pixmap);
+    trayAndWindowIcon   = appIcon;
 }
 
 const NetworkStyle *NetworkStyle::instantiate(const QString &networkId)

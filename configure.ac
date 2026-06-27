@@ -3,7 +3,7 @@ dnl Quavence: bump _CLIENT_VERSION_BUILD (or MINOR) for every published binary p
 dnl Keep the one-line VERSION file in the repo root in sync with these four lines.
 define(_CLIENT_VERSION_MAJOR, 13)
 define(_CLIENT_VERSION_MINOR, 4)
-define(_CLIENT_VERSION_BUILD, 5)
+define(_CLIENT_VERSION_BUILD, 6)
 define(_CLIENT_VERSION_IS_RELEASE, true)
 define(_COPYRIGHT_YEAR, 2026)
 define(_COPYRIGHT_HOLDERS,[The %s developers])

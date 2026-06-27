@@ -25,8 +25,21 @@ static const bool DEFAULT_SPLASHSCREEN = true;
 #define COLOR_NEGATIVE QColor(255, 0, 0)
 /* Transaction list -- bare address (without label) */
 #define COLOR_BAREADDRESS QColor(140, 140, 140)
+
+/* Quavence brand — aligned with TG miniapp (styles.css) */
+#define COLOR_BRAND_PRIMARY QColor(37, 99, 235)   /* #2563eb Logo5 / headings */
+#define COLOR_BRAND_ACCENT QColor(47, 125, 246)   /* #2f7df6 miniapp --accent */
+#define COLOR_BRAND_MUTED QColor(95, 102, 120)    /* #5f6678 miniapp --text-muted */
+#define COLOR_BRAND_COPYRIGHT_LEGACY QColor(139, 149, 166) /* #8b95a6 miniapp --text-dim */
+#define COLOR_BRAND_BORDER QColor(223, 227, 234)    /* #dfe3ea miniapp --card-border */
+#define COLOR_BRAND_DIVIDER QColor(232, 235, 240)   /* #e8ebf0 miniapp --divider */
+#define COLOR_TX_INCOMING QColor(22, 163, 74)       /* #16a34a receive */
+
+/* Compact tx list markers (overview history dots) */
+static const int TX_TYPE_DOT_SIZE = 10;
+
 /* Transaction list -- TX status decoration - open until date */
-#define COLOR_TX_STATUS_OPENUNTILDATE QColor(212, 160, 23)
+#define COLOR_TX_STATUS_OPENUNTILDATE COLOR_BRAND_PRIMARY
 /* Transaction list -- TX status decoration - offline */
 #define COLOR_TX_STATUS_OFFLINE QColor(192, 192, 192)
 /* Transaction list -- TX status decoration - danger, tx needs attention */

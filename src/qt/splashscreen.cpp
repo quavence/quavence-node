@@ -8,6 +8,7 @@
 
 #include "splashscreen.h"
 
+#include "guiconstants.h"
 #include "networkstyle.h"
 
 #include "clientversion.h"
@@ -32,9 +33,9 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     // set reference point, paddings
     const int iconAreaWidth     = 220;
     int paddingRight            = 20;
-    int paddingTop              = 48;
-    int titleVersionVSpace      = 18;
-    int titleCopyrightVSpace    = 48;
+    int paddingTop              = 52;
+    int titleVersionGap         = 10;
+    int titleCopyrightGap       = 28;
 
     float fontFactor            = 1.0;
     float devicePixelRatio      = 1.0;
@@ -44,13 +45,14 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
 
     // define text to place
     QString titleText       = tr(PACKAGE_NAME);
-    QString versionText     = QString("Version %1").arg(QString::fromStdString(FormatFullVersion()));
+    QString versionText     = QString("Version v%1.%2.%3")
+        .arg(CLIENT_VERSION_MAJOR)
+        .arg(CLIENT_VERSION_MINOR)
+        .arg(CLIENT_VERSION_BUILD);
 
     const QChar copySign(0xA9);
-    QString copyrightTextBitcoinCore = copySign + QString(" %1-%2 ").arg(2009).arg(COPYRIGHT_YEAR) + QString("The Bitcoin Core developers");
-    QString copyrightTextBlackcoin   = copySign + QString(" 2014-2018 ") + QString("The Blackcoin developers");
-    QString copyrightTextBlackmore   = copySign + QString(" 2018-2024 ") + QString("The Blackcoin More developers");
-    QString copyrightTextQuavence    = copySign + QString(" %1 ").arg(COPYRIGHT_YEAR) + QString("The Quavence developers");
+    QString copyrightTextLegacy = copySign + QString(" 2009-%1 The Bitcoin Core developers  ·  2014-2024 Blackcoin / Blackmore").arg(COPYRIGHT_YEAR);
+    QString copyrightTextQuavence = copySign + QString(" %1 The Quavence developers").arg(COPYRIGHT_YEAR);
 
     QString titleAddText    = networkStyle->getTitleAddText();
 
@@ -66,7 +68,6 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
 #endif
 
     QPainter pixPaint(&pixmap);
-    pixPaint.setPen(QColor(100,100,100));
 
     // draw a slightly radial gradient
     QRadialGradient gradient(QPoint(0,0), splashSize.width()/devicePixelRatio);
@@ -80,7 +81,17 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     const int textLeft = iconAreaWidth + 10;
     const int textWidth = splashW - textLeft - paddingRight;
 
-    const QSize iconSize(180 * devicePixelRatio, 180 * devicePixelRatio);
+    const int iconDrawSize = 168;
+    const int iconPad = 6;
+    const int iconX = (iconAreaWidth - iconDrawSize) / 2;
+    const int iconY = 72;
+
+    // White pad so Logo2 reads cleanly on the gradient (see QUAVENCE_BRAND_ASSETS.md).
+    pixPaint.setPen(Qt::NoPen);
+    pixPaint.setBrush(Qt::white);
+    pixPaint.drawEllipse(iconX - iconPad, iconY - iconPad, iconDrawSize + iconPad * 2, iconDrawSize + iconPad * 2);
+
+    const QSize iconSize(iconDrawSize * devicePixelRatio, iconDrawSize * devicePixelRatio);
     QPixmap iconPixmap(":/icons/quavence-brand");
     if (iconPixmap.isNull()) {
         iconPixmap = networkStyle->getAppIcon().pixmap(iconSize);
@@ -91,10 +102,10 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
             Qt::SmoothTransformation);
     }
     iconPixmap.setDevicePixelRatio(devicePixelRatio);
-    const int iconX = (iconAreaWidth - 180) / 2;
-    pixPaint.drawPixmap(iconX, 72, 180, 180, iconPixmap);
+    pixPaint.drawPixmap(iconX, iconY, iconDrawSize, iconDrawSize, iconPixmap);
 
     // Title and version (right column)
+    pixPaint.setPen(COLOR_BRAND_PRIMARY);
     pixPaint.setFont(QFont(font, 33*fontFactor));
     QFontMetrics fm = pixPaint.fontMetrics();
     int titleTextWidth = fm.width(titleText);
@@ -106,30 +117,35 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     fm = pixPaint.fontMetrics();
     titleTextWidth = fm.width(titleText);
     const int textX = textLeft + qMax(0, textWidth - titleTextWidth);
-    pixPaint.drawText(textX, paddingTop, titleText);
+    const int titleBaseline = paddingTop + fm.ascent();
+    pixPaint.drawText(textX, titleBaseline, titleText);
 
-    pixPaint.setFont(QFont(font, 15*fontFactor));
+    pixPaint.setPen(COLOR_BRAND_MUTED);
+    int versionFontSize = qMax(10, int(15 * fontFactor));
+    pixPaint.setFont(QFont(font, versionFontSize));
+    QFontMetrics versionFm = pixPaint.fontMetrics();
 
-    // if the version string is to long, reduce size
-    fm = pixPaint.fontMetrics();
-    int versionTextWidth  = fm.width(versionText);
-    if(versionTextWidth > titleTextWidth+paddingRight-10) {
-        pixPaint.setFont(QFont(font, 10*fontFactor));
-        titleVersionVSpace -= 5;
+    // if the version string is too long, reduce size
+    int versionTextWidth = versionFm.width(versionText);
+    if (versionTextWidth > textWidth) {
+        versionFontSize = qMax(10, int(10 * fontFactor));
+        pixPaint.setFont(QFont(font, versionFontSize));
+        versionFm = pixPaint.fontMetrics();
+        versionTextWidth = versionFm.width(versionText);
     }
-    pixPaint.drawText(textX, paddingTop + titleVersionVSpace, versionText);
+    const int versionBaseline = titleBaseline + fm.descent() + titleVersionGap + versionFm.ascent();
+    pixPaint.drawText(textX, versionBaseline, versionText);
 
-    // Copyright lines (smaller font, fixed column width)
+    // Copyright (Quavence prominent, legacy attribution compact)
     {
         const int crFontSize = qMax(7, int(8 * fontFactor));
         pixPaint.setFont(QFont(font, crFontSize));
-        const int y = paddingTop + titleCopyrightVSpace;
-        const int lineH = crFontSize + 3;
-        const QRect crRect(textLeft, y, textWidth, lineH * 4);
-        pixPaint.drawText(crRect, Qt::AlignLeft | Qt::AlignTop, copyrightTextBitcoinCore);
-        pixPaint.drawText(crRect.translated(0, lineH), Qt::AlignLeft | Qt::AlignTop, copyrightTextBlackcoin);
-        pixPaint.drawText(crRect.translated(0, lineH * 2), Qt::AlignLeft | Qt::AlignTop, copyrightTextBlackmore);
-        pixPaint.drawText(crRect.translated(0, lineH * 3), Qt::AlignLeft | Qt::AlignTop, copyrightTextQuavence);
+        const int y = versionBaseline + versionFm.descent() + titleCopyrightGap;
+        const int lineH = crFontSize + 4;
+        pixPaint.setPen(COLOR_BRAND_PRIMARY);
+        pixPaint.drawText(QRect(textLeft, y, textWidth, lineH), Qt::AlignLeft | Qt::AlignTop, copyrightTextQuavence);
+        pixPaint.setPen(COLOR_BRAND_COPYRIGHT_LEGACY);
+        pixPaint.drawText(QRect(textLeft, y + lineH, textWidth, lineH * 2), Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, copyrightTextLegacy);
     }
 
     // draw additional text if special network

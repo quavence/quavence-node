@@ -142,6 +142,8 @@ private:
 
     /** Create the main UI actions. */
     void createActions();
+    /** Tint toolbar tab icons (active = brand blue, inactive = muted). */
+    void refreshToolbarTabIcons();
     /** Create the menu bar and sub-menus. */
     void createMenuBar();
     /** Create the toolbars */
@@ -244,6 +246,8 @@ private Q_SLOTS:
 	void updateWeight();
 
     void updateStakingIcon();
+
+    void updateToolbarTabIcon(QAction* action);
 
     /** called by a timer to check if fRequestShutdown has been set **/
     void detectShutdown();

@@ -20,18 +20,17 @@
 #include <QAbstractItemDelegate>
 #include <QPainter>
 
-#define DECORATION_SIZE 54
+#define ROW_HEIGHT 44
+#define ROW_PADDING_H 0
 #define NUM_ITEMS 5
 
 class TxViewDelegate : public QAbstractItemDelegate
 {
     Q_OBJECT
 public:
-    TxViewDelegate(const PlatformStyle *_platformStyle, QObject *parent=nullptr):
-        QAbstractItemDelegate(parent), unit(BitcoinUnits::BTC),
-        platformStyle(_platformStyle)
+    TxViewDelegate(QObject *parent=nullptr):
+        QAbstractItemDelegate(parent), unit(BitcoinUnits::BTC)
     {
-
     }
 
     inline void paint(QPainter *painter, const QStyleOptionViewItem &option,
@@ -39,16 +38,12 @@ public:
     {
         painter->save();
 
-        QIcon icon = qvariant_cast<QIcon>(index.data(TransactionTableModel::RawDecorationRole));
         QRect mainRect = option.rect;
-        QRect decorationRect(mainRect.topLeft(), QSize(DECORATION_SIZE, DECORATION_SIZE));
-        int xspace = DECORATION_SIZE + 8;
+        int xspace = ROW_PADDING_H;
         int ypad = 6;
         int halfheight = (mainRect.height() - 2*ypad)/2;
-        QRect amountRect(mainRect.left() + xspace, mainRect.top()+ypad, mainRect.width() - xspace, halfheight);
-        QRect addressRect(mainRect.left() + xspace, mainRect.top()+ypad+halfheight, mainRect.width() - xspace, halfheight);
-        icon = platformStyle->SingleColorIcon(icon);
-        icon.paint(painter, decorationRect);
+        QRect amountRect(mainRect.left() + xspace, mainRect.top()+ypad, mainRect.width() - xspace - ROW_PADDING_H, halfheight);
+        QRect addressRect(mainRect.left() + xspace, mainRect.top()+ypad+halfheight, mainRect.width() - xspace - ROW_PADDING_H, halfheight);
 
         QDateTime date = index.data(TransactionTableModel::DateRole).toDateTime();
         QString address = index.data(Qt::DisplayRole).toString();
@@ -81,6 +76,10 @@ public:
         {
             foreground = COLOR_UNCONFIRMED;
         }
+        else if(amount > 0)
+        {
+            foreground = COLOR_BRAND_PRIMARY;
+        }
         else
         {
             foreground = option.palette.color(QPalette::Text);
@@ -93,7 +92,7 @@ public:
         }
         painter->drawText(amountRect, Qt::AlignRight|Qt::AlignVCenter, amountText);
 
-        painter->setPen(option.palette.color(QPalette::Text));
+        painter->setPen(COLOR_BRAND_MUTED);
         painter->drawText(amountRect, Qt::AlignLeft|Qt::AlignVCenter, GUIUtil::dateTimeStr(date));
 
         painter->restore();
@@ -101,12 +100,12 @@ public:
 
     inline QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
     {
-        return QSize(DECORATION_SIZE, DECORATION_SIZE);
+        Q_UNUSED(option);
+        Q_UNUSED(index);
+        return QSize(0, ROW_HEIGHT);
     }
 
     int unit;
-    const PlatformStyle *platformStyle;
-
 };
 #include "overviewpage.moc"
 
@@ -124,7 +123,7 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
     currentWatchImmatureBalance(-1),
     currentWatchOnlyStake(-1),
     currentDonationPercentage(0),
-    txdelegate(new TxViewDelegate(platformStyle, this))
+    txdelegate(new TxViewDelegate(this))
 {
     ui->setupUi(this);
 
@@ -134,11 +133,17 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
     ui->labelTransactionsStatus->setIcon(icon);
     ui->labelWalletStatus->setIcon(icon);
 
-    // Recent transactions
+    // Recent transactions (miniapp-style: text only, no large type icons)
+    ui->verticalLayout->setContentsMargins(0, 0, 0, 0);
+    ui->verticalLayout->setSpacing(4);
+    ui->horizontalLayout_2->setContentsMargins(0, 0, 0, 0);
     ui->listTransactions->setItemDelegate(txdelegate);
-    ui->listTransactions->setIconSize(QSize(DECORATION_SIZE, DECORATION_SIZE));
-    ui->listTransactions->setMinimumHeight(NUM_ITEMS * (DECORATION_SIZE + 2));
+    ui->listTransactions->setIconSize(QSize(0, 0));
+    ui->listTransactions->setMinimumHeight(NUM_ITEMS * (ROW_HEIGHT + 2));
     ui->listTransactions->setAttribute(Qt::WA_MacShowFocusRect, false);
+    ui->listTransactions->setStyleSheet(
+        "QListView { background: transparent; border: none; padding: 0px; margin: 0px; }"
+        "QListView::item { padding: 0px; margin: 0px; }");
 
     // Dev-fee row: hidden until network enables treasury in chainparams
     ui->labelDonations->setVisible(false);

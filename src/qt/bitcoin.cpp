@@ -631,6 +631,7 @@ int main(int argc, char *argv[])
     assert(!networkStyle.isNull());
     // Allow for separate UI settings for testnets
     QApplication::setApplicationName(networkStyle->getAppName());
+    QApplication::setWindowIcon(networkStyle->getTrayAndWindowIcon());
     // Re-initialize translations after changing application name (language in network-specific settings can be different)
     initTranslations(qtTranslatorBase, qtTranslator, translatorBase, translator);
 

@@ -869,7 +869,7 @@ bool AppInit2(Config& config, boost::thread_group& threadGroup, CScheduler& sche
 
 #if !QVNC_ENABLE_BOOTSTRAP_TOOLS
     if (mapArgs.count("-bootstrapmining") || mapArgs.count("-bootstrapmineonstart")) {
-        InitWarning(_("Bootstrap mining is not available in this public build."));
+        LogPrintf("%s: ignoring bootstrap mining options (not available in public build)\n", __func__);
         mapArgs.erase("-bootstrapmining");
         mapArgs.erase("-bootstrapmineonstart");
         mapMultiArgs.erase("-bootstrapmining");

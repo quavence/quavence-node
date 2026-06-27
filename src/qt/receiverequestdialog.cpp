@@ -12,11 +12,13 @@
 #include "dstencode.h"
 #include "guiconstants.h"
 #include "guiutil.h"
+#include "guiutil.h"
 #include "optionsmodel.h"
 #include "walletmodel.h"
 
 #include <QClipboard>
 #include <QDrag>
+#include <QFrame>
 #include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -101,6 +103,11 @@ ReceiveRequestDialog::ReceiveRequestDialog(const Config *cfg, QWidget *parent) :
     qrUriMode(PaymentRequestUri)
 {
     ui->setupUi(this);
+    setWindowIcon(qApp->windowIcon());
+    ui->verticalLayout_3->setContentsMargins(16, 16, 16, 12);
+    ui->verticalLayout_3->setSpacing(12);
+    ui->outUri->setReadOnly(true);
+    ui->outUri->setFrameShape(QFrame::StyledPanel);
 
 #ifndef USE_QRCODE
     ui->btnSaveAs->setVisible(false);
@@ -170,32 +177,40 @@ void ReceiveRequestDialog::update()
 
     if (qrUriMode == QvncDepositUri) {
         setWindowTitle(tr("Show QR for %1").arg(target));
+        ui->btnCopyURI->setText(tr("Copy &qvnc URI"));
     } else {
         setWindowTitle(tr("Request payment to %1").arg(target));
+        ui->btnCopyURI->setText(tr("Copy &URI"));
     }
 
     ui->btnSaveAs->setEnabled(false);
     QString html;
-    html += "<html><font face='verdana, arial, helvetica, sans-serif'>";
-    html += "<b>"+tr("Payment information")+"</b><br>";
+    const QString brandBlue = COLOR_BRAND_PRIMARY.name();
+    html += "<html><body style='font-family:verdana,arial,helvetica,sans-serif; margin:0;'>";
+    html += QString("<p style='margin:0 0 8px 0; color:%1; font-weight:bold;'>").arg(brandBlue);
+    html += tr("Payment information");
+    html += "</p>";
     if (qrUriMode == QvncDepositUri) {
-        html += "<b>"+tr("Address")+"</b>: " + GUIUtil::HtmlEscape(info.address) + "<br>";
-        html += "<b>"+tr("QR payload")+"</b>: " + GUIUtil::HtmlEscape(qrUri) + "<br>";
+        if(!info.label.isEmpty())
+            html += "<b>"+tr("Label")+"</b>: " + GUIUtil::HtmlEscape(info.label) + "<br>";
+        html += "<b>"+tr("Address")+"</b>: <span style='font-family:monospace; font-size:11px;'>" + GUIUtil::HtmlEscape(info.address) + "</span>";
     } else {
         html += "<b>"+tr("URI")+"</b>: ";
         html += "<a href=\""+desktopUri+"\">" + GUIUtil::HtmlEscape(desktopUri) + "</a><br>";
         html += "<b>"+tr("Address")+"</b>: " + GUIUtil::HtmlEscape(info.address) + "<br>";
+        if(info.amount)
+            html += "<b>"+tr("Amount")+"</b>: " + BitcoinUnits::formatHtmlWithUnit(model->getDisplayUnit(), info.amount) + "<br>";
+        if(!info.label.isEmpty())
+            html += "<b>"+tr("Label")+"</b>: " + GUIUtil::HtmlEscape(info.label) + "<br>";
+        if(!info.message.isEmpty())
+            html += "<b>"+tr("Message")+"</b>: " + GUIUtil::HtmlEscape(info.message) + "<br>";
     }
-    if(info.amount)
-        html += "<b>"+tr("Amount")+"</b>: " + BitcoinUnits::formatHtmlWithUnit(model->getDisplayUnit(), info.amount) + "<br>";
-    if(!info.label.isEmpty())
-        html += "<b>"+tr("Label")+"</b>: " + GUIUtil::HtmlEscape(info.label) + "<br>";
-    if(!info.message.isEmpty())
-        html += "<b>"+tr("Message")+"</b>: " + GUIUtil::HtmlEscape(info.message) + "<br>";
+    html += "</body></html>";
     ui->outUri->setText(html);
 
 #ifdef USE_QRCODE
-    int fontSize = cfg->UseCashAddrEncoding() ? 10 : 12;
+    const bool showAddressUnderQr = (qrUriMode != QvncDepositUri);
+    const int qrCanvasHeight = showAddressUnderQr ? QR_IMAGE_SIZE + 20 : QR_IMAGE_SIZE;
 
     ui->lblQRCode->setText("");
     if(!qrUri.isEmpty())
@@ -224,16 +239,19 @@ void ReceiveRequestDialog::update()
             }
             QRcode_free(code);
 
-            QImage qrAddrImage = QImage(QR_IMAGE_SIZE, QR_IMAGE_SIZE+20, QImage::Format_RGB32);
+            QImage qrAddrImage = QImage(QR_IMAGE_SIZE, qrCanvasHeight, QImage::Format_RGB32);
             qrAddrImage.fill(0xffffff);
             QPainter painter(&qrAddrImage);
             painter.drawImage(0, 0, qrImage.scaled(QR_IMAGE_SIZE, QR_IMAGE_SIZE));
-            QFont font = GUIUtil::fixedPitchFont();
-            font.setPixelSize(fontSize);
-            painter.setFont(font);
-            QRect paddedRect = qrAddrImage.rect();
-            paddedRect.setHeight(QR_IMAGE_SIZE+12);
-            painter.drawText(paddedRect, Qt::AlignBottom|Qt::AlignCenter, info.address);
+            if (showAddressUnderQr) {
+                int fontSize = cfg->UseCashAddrEncoding() ? 10 : 12;
+                QFont font = GUIUtil::fixedPitchFont();
+                font.setPixelSize(fontSize);
+                painter.setFont(font);
+                QRect paddedRect = qrAddrImage.rect();
+                paddedRect.setHeight(QR_IMAGE_SIZE+12);
+                painter.drawText(paddedRect, Qt::AlignBottom|Qt::AlignCenter, info.address);
+            }
             painter.end();
 
             ui->lblQRCode->setPixmap(QPixmap::fromImage(qrAddrImage));

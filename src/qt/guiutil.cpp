@@ -5,7 +5,14 @@
 #include "guiutil.h"
 
 #include <QApplication>
+#include "guiconstants.h"
+
 #include <QPalette>
+#include <QIcon>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPixmap>
+#include <QtMath>
 
 #include "bitcoinaddressvalidator.h"
 #include "bitcoinunits.h"
@@ -541,14 +548,207 @@ void SubstituteFonts(const QString& language)
 #endif
 }
 
+static QString brandStyleSheet()
+{
+    const QString primary = COLOR_BRAND_PRIMARY.name();
+    const QString accent = COLOR_BRAND_ACCENT.name();
+    const QString muted = COLOR_BRAND_MUTED.name();
+    const QString border = COLOR_BRAND_BORDER.name();
+    const QString divider = COLOR_BRAND_DIVIDER.name();
+    const QString highlightBg = QString("rgba(%1,%2,%3,0.12)")
+        .arg(COLOR_BRAND_PRIMARY.red()).arg(COLOR_BRAND_PRIMARY.green()).arg(COLOR_BRAND_PRIMARY.blue());
+
+    return QString(
+        "QMainWindow { background: #ffffff; }"
+        "QDialog { background: #ffffff; }"
+        "QMenuBar { background: #ffffff; color: %1; border-bottom: 1px solid %2; padding: 1px 0; }"
+        "QMenuBar::item { padding: 3px 8px; }"
+        "QMenuBar::item:selected { background: %3; color: %4; }"
+        "QToolBar { background: #ffffff; border-bottom: 1px solid %2; spacing: 4px; padding: 1px 4px; }"
+        "QToolBar QToolButton { color: %1; padding: 3px 10px; border: none; border-radius: 0; }"
+        "QToolBar QToolButton:hover { background: %3; color: %4; }"
+        "QToolBar QToolButton:checked { color: %4; background: %3; border: none; border-bottom: 2px solid %4; border-radius: 0; margin-bottom: -1px; }"
+        "QStatusBar { background: #ffffff; color: %1; border-top: 1px solid %2; }"
+        "QTabBar::tab { color: %1; padding: 6px 12px; border-radius: 0; }"
+        "QTabBar::tab:selected { color: %4; border-bottom: 2px solid %4; border-radius: 0; }"
+        "QGroupBox { font-weight: bold; color: %4; border: 1px solid %5; border-radius: 8px; margin-top: 8px; padding-top: 12px; }"
+        "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; color: %4; }"
+        "QPushButton { padding: 5px 14px; border-radius: 6px; border: 1px solid %5; background: #ffffff; color: #111418; }"
+        "QPushButton:hover { border-color: %4; color: %4; background: %3; }"
+        "QPushButton:default { background: %4; color: #ffffff; border: 1px solid %4; }"
+        "QPushButton:default:hover { background: %6; border-color: %6; }"
+        "QHeaderView::section { background: #ffffff; color: %1; padding: 4px; border: none; border-bottom: 1px solid %2; }"
+        "QTableView { gridline-color: %2; selection-background-color: %3; selection-color: #111418; }"
+        "QLineEdit, QTextEdit, QPlainTextEdit, QComboBox { border: 1px solid %5; border-radius: 6px; padding: 3px 6px; background: #ffffff; }"
+        "QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus { border-color: %4; }"
+        "QProgressBar { border: 1px solid %5; border-radius: 6px; background: %2; text-align: center; color: %1; }"
+        "QProgressBar::chunk { background: %4; border-radius: 5px; }"
+    ).arg(muted, divider, highlightBg, primary, border, accent);
+}
+
 void InitBrandPalette()
 {
     QPalette pal = QApplication::palette();
-    const QColor brandGold(212, 160, 23);
-    pal.setColor(QPalette::Highlight, brandGold);
-    pal.setColor(QPalette::HighlightedText, Qt::black);
-    pal.setColor(QPalette::Link, brandGold.darker(115));
+    pal.setColor(QPalette::Window, Qt::white);
+    pal.setColor(QPalette::Base, Qt::white);
+    pal.setColor(QPalette::Highlight, QColor(240, 247, 255)); /* miniapp --success-bg */
+    pal.setColor(QPalette::HighlightedText, COLOR_BRAND_PRIMARY);
+    pal.setColor(QPalette::Link, COLOR_BRAND_ACCENT);
+    pal.setColor(QPalette::LinkVisited, COLOR_BRAND_PRIMARY.darker(115));
     QApplication::setPalette(pal);
+    qApp->setStyleSheet(brandStyleSheet());
+}
+
+QIcon txTypeDotIcon(const QColor &color, int diameter)
+{
+    const int d = qMax(4, diameter);
+    QPixmap pm(d, d);
+    pm.fill(Qt::transparent);
+    QPainter painter(&pm);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(color);
+    painter.drawEllipse(0, 0, d - 1, d - 1);
+    painter.end();
+    return QIcon(pm);
+}
+
+namespace {
+
+static QPainterPath toolbarOverviewShape()
+{
+    QPainterPath path;
+    path.addRect(QRectF(4, 8.5, 16, 11));
+    path.addRoundedRect(QRectF(6, 5.5, 12, 1.5), 1, 1);
+    path.addRect(QRectF(8, 18, 8, 1.5));
+    return path;
+}
+
+static QPainterPath toolbarSendShape()
+{
+    QPainterPath path;
+    QPainterPath top;
+    top.moveTo(5, 7.5);
+    top.lineTo(16.2, 7.5);
+    top.lineTo(14, 5.3);
+    top.lineTo(15.4, 3.9);
+    top.lineTo(20, 8.5);
+    top.lineTo(15.4, 13.1);
+    top.lineTo(14, 11.7);
+    top.lineTo(16.2, 9.5);
+    top.lineTo(5, 9.5);
+    top.closeSubpath();
+
+    QPainterPath bottom;
+    bottom.moveTo(19, 16.5);
+    bottom.lineTo(7.8, 16.5);
+    bottom.lineTo(10, 18.7);
+    bottom.lineTo(8.6, 20.1);
+    bottom.lineTo(4, 15.5);
+    bottom.lineTo(8.6, 10.9);
+    bottom.lineTo(10, 12.3);
+    bottom.lineTo(7.8, 14.5);
+    bottom.lineTo(19, 14.5);
+    bottom.closeSubpath();
+
+    path.addPath(top);
+    path.addPath(bottom);
+    return path;
+}
+
+static QPainterPath toolbarReceiveShape()
+{
+    QPainterPath path;
+    path.setFillRule(Qt::OddEvenFill);
+    QPainterPath house;
+    house.moveTo(12, 3.5);
+    house.lineTo(5, 8.5);
+    house.lineTo(5, 17.5);
+    house.lineTo(19, 17.5);
+    house.lineTo(19, 8.5);
+    house.closeSubpath();
+    path.addPath(house);
+
+    QPainterPath inner;
+    inner.moveTo(12, 6.1);
+    inner.lineTo(16.5, 9.3);
+    inner.lineTo(16.5, 16);
+    inner.lineTo(7.5, 16);
+    inner.lineTo(7.5, 9.3);
+    inner.closeSubpath();
+    path.addPath(inner);
+
+    path.addRect(QRectF(11, 11, 2, 5));
+    return path;
+}
+
+static void appendArcPolyline(QPainterPath &path, qreal cx, qreal cy, qreal r,
+                              qreal startDeg, qreal sweepDeg)
+{
+    const int steps = qMax(10, int(qAbs(sweepDeg) / 8));
+    for (int i = 1; i <= steps; ++i) {
+        const qreal deg = startDeg + sweepDeg * qreal(i) / qreal(steps);
+        const qreal rad = qDegreesToRadians(deg);
+        path.lineTo(cx + r * qCos(rad), cy + r * qSin(rad));
+    }
+}
+
+static QPainterPath toolbarTransactionsShape()
+{
+    QPainterPath path;
+    // filled/transactions.svg — ring + arrow (sampled arcs, same geometry as preview)
+    path.moveTo(12, 4);
+    appendArcPolyline(path, 12, 12, 8, -90, -270);
+    path.lineTo(18, 12);
+    appendArcPolyline(path, 12, 12, 6, 0, 309);
+    path.lineTo(14, 10);
+    path.lineTo(20, 10);
+    path.lineTo(20, 4);
+    path.lineTo(17.5, 6.5);
+    appendArcPolyline(path, 12, 12, 7.9, 315, -45);
+    path.closeSubpath();
+
+    path.addRect(QRectF(11, 8, 2, 4.2));
+    QPainterPath hour;
+    hour.moveTo(13, 12.2);
+    hour.lineTo(16.2, 14.1);
+    hour.lineTo(15.3, 15.7);
+    hour.lineTo(11.5, 13.4);
+    hour.closeSubpath();
+    path.addPath(hour);
+    return path;
+}
+
+} // namespace
+
+QIcon brandToolbarIcon(BrandToolbarIcon icon, const QColor &color)
+{
+    static const int kPx = 40;
+    QPixmap pm(kPx, kPx);
+    pm.fill(Qt::transparent);
+    QPainter painter(&pm);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(color);
+    painter.scale(kPx / 24.0, kPx / 24.0);
+
+    switch (icon) {
+    case BrandToolbarIcon::Overview:
+        painter.drawPath(toolbarOverviewShape());
+        break;
+    case BrandToolbarIcon::Send:
+        painter.drawPath(toolbarSendShape());
+        break;
+    case BrandToolbarIcon::Receive:
+        painter.drawPath(toolbarReceiveShape());
+        break;
+    case BrandToolbarIcon::Transactions:
+        painter.drawPath(toolbarTransactionsShape());
+        break;
+    }
+
+    painter.end();
+    return QIcon(pm);
 }
 
 ToolTipToRichTextFilter::ToolTipToRichTextFilter(int size_threshold, QObject *parent) :

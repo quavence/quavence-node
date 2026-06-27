@@ -6,6 +6,7 @@
 #define BITCOIN_QT_GUIUTIL_H
 
 #include "amount.h"
+#include "guiconstants.h"
 
 #include <QEvent>
 #include <QHeaderView>
@@ -14,6 +15,9 @@
 #include <QProgressBar>
 #include <QString>
 #include <QTableView>
+
+#include <QColor>
+#include <QIcon>
 
 #include <boost/filesystem.hpp>
 
@@ -130,8 +134,21 @@ namespace GUIUtil
     // Replace invalid default fonts with known good ones
     void SubstituteFonts(const QString& language);
 
-    /** Quavence brand palette (gold highlight, readable on light Qt themes). */
+    /** Quavence white/blue theme (miniapp-aligned palette + light QSS). */
     void InitBrandPalette();
+
+    /** Small filled circle for transaction type markers in history tables. */
+    QIcon txTypeDotIcon(const QColor &color, int diameter = TX_TYPE_DOT_SIZE);
+
+    enum class BrandToolbarIcon {
+        Overview,
+        Send,
+        Receive,
+        Transactions
+    };
+
+    /** Filled miniapp-style toolbar icon (24×24 art in a 40×40 pixmap). */
+    QIcon brandToolbarIcon(BrandToolbarIcon icon, const QColor &color);
 
     /** Qt event filter that intercepts ToolTipChange events, and replaces the tooltip with a rich text
       representation if needed. This assures that Qt can word-wrap long tooltip messages.
