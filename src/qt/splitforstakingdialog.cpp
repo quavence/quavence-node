@@ -28,8 +28,6 @@ namespace {
 static const int MAX_OUTPUTS_DEFAULT = 100;
 static const int MAX_OUTPUTS_HARD = 200;
 static const int TARGET_OUTPUTS_RECOMMEND = 35;
-/** Same as CWallet::GetStakeCombineThreshold() — keep at least this much mature for staking. */
-static const CAmount MIN_MATURE_STAKE_RESERVE = 500 * COIN;
 
 CAmount NiceRoundUp(CAmount raw)
 {
@@ -554,15 +552,18 @@ bool SplitForStakingDialog::leavesMatureStakeReserve(CAmount splitAmount, bool &
     QString &error) const
 {
     singleUtxoPause = false;
+    error.clear();
     if (!model)
         return true;
 
     std::vector<COutput> vCoins;
     model->listMatureStakingCoins(vCoins);
 
-    if (vCoins.empty()) {
-        error = tr("No mature staking UTXOs available.");
-        return false;
+    // If there are no mature staking coins or only 1, or if all mature coins are being split,
+    // we flag singleUtxoPause to inform the user in the confirmation dialog.
+    if (vCoins.empty() || vCoins.size() <= 1) {
+        singleUtxoPause = true;
+        return true;
     }
 
     CAmount totalMatureStake = 0;
@@ -572,41 +573,20 @@ bool SplitForStakingDialog::leavesMatureStakeReserve(CAmount splitAmount, bool &
     const CCoinControl *active = activeCoinControl();
     if (fCoinControlEnabled && active && active->HasSelected()) {
         int nUnselected = 0;
-        CAmount unselectedValue = 0;
         for (const COutput& out : vCoins) {
             const COutPoint op(out.tx->GetHash(), out.i);
-            if (active->IsSelected(op))
-                continue;
-            nUnselected++;
-            unselectedValue += out.tx->vout[out.i].nValue;
+            if (!active->IsSelected(op))
+                nUnselected++;
         }
-        if (nUnselected > 0 && unselectedValue >= MIN_MATURE_STAKE_RESERVE)
-            return true;
-        error = tr("In Coin Control, leave at least one mature UTXO unchecked (combined value at least %1).")
-            .arg(BitcoinUnits::formatWithUnit(model->getOptionsModel()->getDisplayUnit(), MIN_MATURE_STAKE_RESERVE));
-        return false;
+        if (nUnselected == 0)
+            singleUtxoPause = true;
+        return true;
     }
 
     if (splitAmount >= totalMatureStake) {
-        error = tr("Split amount is too high. Leave at least one mature staking UTXO path untouched.");
-        return false;
+        singleUtxoPause = true;
     }
 
-    if (vCoins.size() >= 2) {
-        CAmount avail = availableBalance();
-        if (splitAmount <= avail - MIN_MATURE_STAKE_RESERVE)
-            return true;
-        error = tr("Split amount is too high. Keep at least %1 in mature UTXOs so staking can continue.")
-            .arg(BitcoinUnits::formatWithUnit(model->getOptionsModel()->getDisplayUnit(), MIN_MATURE_STAKE_RESERVE));
-        return false;
-    }
-
-    singleUtxoPause = true;
-    CAmount avail = availableBalance();
-    if (splitAmount >= avail) {
-        error = tr("Cannot split the entire balance in one transaction.");
-        return false;
-    }
     return true;
 }
 
@@ -827,7 +807,7 @@ void SplitForStakingDialog::splitButtonClicked()
         .arg(BitcoinUnits::formatWithUnit(model->getOptionsModel()->getDisplayUnit(), change));
 
     if (singleUtxoPause) {
-        question.prepend(tr("You have only one mature staking UTXO. Staking will pause until this split confirms (about 1 block).\n\n"));
+        question.prepend(tr("Staking note: all mature staking coins in the wallet are included in this split. Staking will temporarily pause until the newly split outputs mature.\n\n"));
     }
     QString selectedWarning;
     selectedInputsPassSafetyChecks(selectedWarning);
