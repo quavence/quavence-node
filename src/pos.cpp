@@ -83,6 +83,16 @@ bool CheckStakeKernelHash(const CBlockIndex* pindexPrev, unsigned int nBits, uin
     if (nValueIn == 0)
         return error("CheckStakeKernelHash() : nValueIn = 0");
     arith_uint256 bnWeight = arith_uint256(nValueIn);
+
+    // Proof-of-Useful-Stake boost: active AI workers receive stake weight boost
+    int nAiBoost = GetAiStakeBoost(prevout, pindexPrev);
+    if (nAiBoost > 0 && nAiBoost <= MAX_AI_BOOST_PERCENT) {
+        bnWeight = bnWeight * (100 + nAiBoost) / 100;
+        if (fPrintProofOfStake) {
+            LogPrintf("CheckStakeKernelHash() : Proof-of-Useful-Stake boost applied: +%d%%\n", nAiBoost);
+        }
+    }
+
     bnTarget *= bnWeight;
 
     uint256 nStakeModifier = pindexPrev->nStakeModifier;

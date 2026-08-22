@@ -1,3 +1,4 @@
+#include <airegistry.h>
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
@@ -4024,6 +4025,7 @@ static bool AcceptBlock(const CBlock& block, CValidationState& state, const CCha
         return state.DoS(100, error("%s: reject proof-of-work at height %d",  __func__, nHeight),
                         REJECT_INVALID, "bad-pow-height");
 
+    RegisterAiAttestationsInBlock(block, pindex->nHeight, block.GetBlockTime());
     // Write block to history file
     try {
         unsigned int nBlockSize = ::GetSerializeSize(block, SER_DISK, CLIENT_VERSION);

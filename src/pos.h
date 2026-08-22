@@ -20,6 +20,7 @@
 #include <chainparams.h>
 #include <script/sign.h>
 #include <consensus/consensus.h>
+#include <airegistry.h>
 #include <stdint.h>
 
 using namespace std;

@@ -390,3 +390,15 @@ CScript CChainParams::GetDevRewardScript() const
     CScript scriptPubKey = GetScriptForDestination(dest);
     return scriptPubKey;
 }
+
+std::string CChainParams::GetAiWorkerPoolAddress() const
+{
+    return !vAiWorkerPoolAddress.empty() ? vAiWorkerPoolAddress[0] : "";
+}
+
+CScript CChainParams::GetAiWorkerPoolScript() const
+{
+    CTxDestination dest = DecodeDestination(GetAiWorkerPoolAddress());
+    CScript scriptPubKey = GetScriptForDestination(dest);
+    return scriptPubKey;
+}

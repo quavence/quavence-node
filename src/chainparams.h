@@ -81,6 +81,9 @@ public:
     /** Dev-fee share of stake rewards (0–95). Network constant; not user-configurable. */
     unsigned int DevFundDonationPercent() const { return nDevFundDonationPercent; }
     CScript GetDevRewardScript() const;
+    std::string GetAiWorkerPoolAddress() const;
+    CScript GetAiWorkerPoolScript() const;
+    int GetAiWorkerPoolPercent() const { return nAiWorkerPoolPercent; }
 protected:
     CChainParams() : nDevFundDonationPercent(0) {}
 
@@ -101,6 +104,8 @@ protected:
     bool fTestnetToBeDeprecatedFieldRPC;
     CCheckpointData checkpointData;
     std::vector<std::string> vDevFundAddress;
+    std::vector<std::string> vAiWorkerPoolAddress;
+    int nAiWorkerPoolPercent = 30;
     unsigned int nDevFundDonationPercent;
 };
 

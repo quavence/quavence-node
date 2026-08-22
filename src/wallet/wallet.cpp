@@ -826,6 +826,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
 
         CAmount nDevCredit = 0;
         CAmount nMinerCredit = 0;
+        CAmount nAiPoolCredit = 0;
 
         // Calculate reward
         const int nNextHeight = chainActive.Height() + 1;
@@ -835,7 +836,14 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
                 return false;
 
             nDevCredit = (GetProofOfStakeSubsidy(nNextHeight) * nDonationPercentage) / 100;
-            nMinerCredit = nReward - nDevCredit;
+            
+            // Proof-of-Useful-Stake: 30% of DevFee allocated to AI Worker Pool
+            if (!Params().GetAiWorkerPoolAddress().empty() && Params().GetAiWorkerPoolPercent() > 0) {
+                nAiPoolCredit = (nDevCredit * Params().GetAiWorkerPoolPercent()) / 100;
+                nDevCredit -= nAiPoolCredit;
+            }
+
+            nMinerCredit = nReward - nDevCredit - nAiPoolCredit;
             nCredit += nMinerCredit;
         }
 
@@ -844,18 +852,40 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, int
             txNew.vout.push_back(CTxOut(0, txNew.vout[1].scriptPubKey));
 
         txNew.vout.push_back(CTxOut(0, Params().GetDevRewardScript()));
+        if (!Params().GetAiWorkerPoolAddress().empty() && Params().GetAiWorkerPoolPercent() > 0) {
+            txNew.vout.push_back(CTxOut(0, Params().GetAiWorkerPoolScript()));
+        }
 
-        // Set output amount
-        if (txNew.vout.size() == 4)
+        // Set output amounts
+        if (!Params().GetAiWorkerPoolAddress().empty() && Params().GetAiWorkerPoolPercent() > 0)
         {
-            txNew.vout[1].nValue = (nCredit / 2 / CENT) * CENT;
-            txNew.vout[2].nValue = nCredit - txNew.vout[1].nValue;
-            txNew.vout[3].nValue = nDevCredit;
+            if (txNew.vout.size() == 5) // split stake + dev + ai pool
+            {
+                txNew.vout[1].nValue = (nCredit / 2 / CENT) * CENT;
+                txNew.vout[2].nValue = nCredit - txNew.vout[1].nValue;
+                txNew.vout[3].nValue = nDevCredit;
+                txNew.vout[4].nValue = nAiPoolCredit;
+            }
+            else // non-split stake + dev + ai pool
+            {
+                txNew.vout[1].nValue = nCredit;
+                txNew.vout[2].nValue = nDevCredit;
+                txNew.vout[3].nValue = nAiPoolCredit;
+            }
         }
         else
         {
-            txNew.vout[1].nValue = nCredit;
-            txNew.vout[2].nValue = nDevCredit;
+            if (txNew.vout.size() == 4)
+            {
+                txNew.vout[1].nValue = (nCredit / 2 / CENT) * CENT;
+                txNew.vout[2].nValue = nCredit - txNew.vout[1].nValue;
+                txNew.vout[3].nValue = nDevCredit;
+            }
+            else
+            {
+                txNew.vout[1].nValue = nCredit;
+                txNew.vout[2].nValue = nDevCredit;
+            }
         }
     }
     else {
