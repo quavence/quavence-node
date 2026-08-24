@@ -29,10 +29,12 @@ using namespace std;
 uint256 ComputeStakeModifier(const CBlockIndex* pindexPrev, const uint256& kernel);
 
 struct CStakeCache{
-    CStakeCache(uint32_t blockFromTime_, CAmount amount_) : blockFromTime(blockFromTime_), amount(amount_){
+    CStakeCache(uint32_t blockFromTime_, CAmount amount_, const CScript& scriptPubKey_ = CScript())
+        : blockFromTime(blockFromTime_), amount(amount_), scriptPubKey(scriptPubKey_) {
     }
     uint32_t blockFromTime;
     CAmount amount;
+    CScript scriptPubKey;
 };
 
 // Check whether the coinstake timestamp meets protocol
@@ -40,7 +42,7 @@ bool CheckCoinStakeTimestamp(int64_t nTimeBlock, int64_t nTimeTx);
 bool CheckStakeBlockTimestamp(int64_t nTimeBlock);
 bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t nTime, const COutPoint& prevout);
 bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t nTime, const COutPoint& prevout, const std::map<COutPoint, CStakeCache>& cache);
-bool CheckStakeKernelHash(const CBlockIndex* pindexPrev, unsigned int nBits, uint32_t blockFromTime, CAmount prevoutValue, const COutPoint& prevout, unsigned int nTimeTx, bool fPrintProofOfStake = false);
+bool CheckStakeKernelHash(const CBlockIndex* pindexPrev, unsigned int nBits, uint32_t blockFromTime, CAmount prevoutValue, const COutPoint& prevout, const CScript& prevoutScript, unsigned int nTimeTx, bool fPrintProofOfStake = false);
 bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned int nBits, CValidationState& state, unsigned int nTimeTx);
 void CacheKernel(std::map<COutPoint, CStakeCache>& cache, const COutPoint& prevout, CBlockIndex* pindexPrev);
 bool VerifySignature(const CTransaction& txFrom, const CTransaction& txTo, unsigned int nIn, unsigned int flags, int nHashType);

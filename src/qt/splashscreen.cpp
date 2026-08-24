@@ -113,16 +113,17 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
         fontFactor = fontFactor * textWidth / titleTextWidth;
     }
 
-    pixPaint.setFont(QFont(font, 33*fontFactor));
+    QFont titleFont(font, int(32 * fontFactor), QFont::Bold);
+    pixPaint.setFont(titleFont);
+    pixPaint.setPen(QColor(15, 23, 42)); // Modern deep slate
     fm = pixPaint.fontMetrics();
-    titleTextWidth = fm.width(titleText);
-    const int textX = textLeft + qMax(0, textWidth - titleTextWidth);
-    const int titleBaseline = paddingTop + fm.ascent();
+    const int textX = textLeft + 10;
+    const int titleBaseline = paddingTop + 16 + fm.ascent();
     pixPaint.drawText(textX, titleBaseline, titleText);
 
-    pixPaint.setPen(COLOR_BRAND_MUTED);
-    int versionFontSize = qMax(10, int(15 * fontFactor));
-    pixPaint.setFont(QFont(font, versionFontSize));
+    pixPaint.setPen(QColor(100, 116, 139)); // Slate muted
+    int versionFontSize = qMax(10, int(14 * fontFactor));
+    pixPaint.setFont(QFont(font, versionFontSize, QFont::Medium));
     QFontMetrics versionFm = pixPaint.fontMetrics();
 
     // if the version string is too long, reduce size
@@ -133,19 +134,19 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
         versionFm = pixPaint.fontMetrics();
         versionTextWidth = versionFm.width(versionText);
     }
-    const int versionBaseline = titleBaseline + fm.descent() + titleVersionGap + versionFm.ascent();
+    const int versionBaseline = titleBaseline + fm.descent() + 6 + versionFm.ascent();
     pixPaint.drawText(textX, versionBaseline, versionText);
 
-    // Copyright (Quavence prominent, legacy attribution compact)
+    // Copyright (Clean left aligned with Title & Version)
     {
         const int crFontSize = qMax(7, int(8 * fontFactor));
         pixPaint.setFont(QFont(font, crFontSize));
-        const int y = versionBaseline + versionFm.descent() + titleCopyrightGap;
+        const int y = versionBaseline + versionFm.descent() + 20;
         const int lineH = crFontSize + 4;
-        pixPaint.setPen(COLOR_BRAND_PRIMARY);
-        pixPaint.drawText(QRect(textLeft, y, textWidth, lineH), Qt::AlignLeft | Qt::AlignTop, copyrightTextQuavence);
-        pixPaint.setPen(COLOR_BRAND_COPYRIGHT_LEGACY);
-        pixPaint.drawText(QRect(textLeft, y + lineH, textWidth, lineH * 2), Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, copyrightTextLegacy);
+        pixPaint.setPen(QColor(37, 99, 235));
+        pixPaint.drawText(QRect(textX, y, textWidth, lineH), Qt::AlignLeft | Qt::AlignTop, copyrightTextQuavence);
+        pixPaint.setPen(QColor(148, 163, 184));
+        pixPaint.drawText(QRect(textX, y + lineH, textWidth, lineH * 2), Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, copyrightTextLegacy);
     }
 
     // draw additional text if special network

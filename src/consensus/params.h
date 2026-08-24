@@ -7,6 +7,7 @@
 #define BITCOIN_CONSENSUS_PARAMS_H
 
 #include <uint256.h>
+#include <pubkey.h>
 #include <map>
 #include <string>
 
@@ -80,6 +81,9 @@ struct Params {
     int nStakeTimestampMask;
     int nCoinbaseMaturity;
     uint256 nMinimumChainWork;
+    // PoUS: authorized identity keys stored as Hash160 (CKeyID)
+    CKeyID aiHubKeyID;
+    CKeyID aiPoolKeyID;
 };
 } // namespace Consensus
 

@@ -132,6 +132,14 @@ public:
         consensus.nCoinbaseMaturity = 50;
         consensus.nMinimumChainWork = uint256S("0x00");
 
+        // PoUS authorized identity addresses:
+        // aiHubKeyID  = SPdSBBkFNKop3auzvFjGJpaCAdVnMQFyyd (Hub Anchor Gas)
+        // aiPoolKeyID = ScmZ5fYVTADyMcH11CXtf9iC9qVeRHA31M (AI Worker Pool)
+        consensus.aiHubKeyID = CKeyID(uint160(ParseHex("199d24d59b414a597af788a8735c228282dc0f84")));
+        consensus.aiPoolKeyID = CKeyID(uint160(ParseHex("a9bfdee0c1874e4f8f167959166fc89c85316c79")));
+        assert(!consensus.aiHubKeyID.IsNull());
+        assert(!consensus.aiPoolKeyID.IsNull());
+
         pchMessageStart[0] = 0xd3;
         pchMessageStart[1] = 0x73;
         pchMessageStart[2] = 0x6e;
@@ -173,8 +181,11 @@ public:
             0,
             0.0};
 
-        vDevFundAddress.clear();
-        nDevFundDonationPercent = 0; // enable later with vDevFundAddress + percent in a release
+        vDevFundAddress = { "SXbKabuHh7xn3QuXF7DMG758D9j4rVcL6V" };
+        nDevFundDonationPercent = 15;
+        nDevFundActivationHeight = 91450;
+        vAiWorkerPoolAddress = { "ScmZ5fYVTADyMcH11CXtf9iC9qVeRHA31M" };
+        nAiWorkerPoolPercent = 30;
     }
 };
 static CMainParams mainParams;
@@ -225,6 +236,14 @@ public:
 
         // The best chain should have at least this much work.
         consensus.nMinimumChainWork = uint256S("0x00");
+
+        // PoUS authorized identity addresses:
+        // aiHubKeyID  = SPdSBBkFNKop3auzvFjGJpaCAdVnMQFyyd (Hub Anchor Gas)
+        // aiPoolKeyID = ScmZ5fYVTADyMcH11CXtf9iC9qVeRHA31M (AI Worker Pool)
+        consensus.aiHubKeyID = CKeyID(uint160(ParseHex("199d24d59b414a597af788a8735c228282dc0f84")));
+        consensus.aiPoolKeyID = CKeyID(uint160(ParseHex("a9bfdee0c1874e4f8f167959166fc89c85316c79")));
+        assert(!consensus.aiHubKeyID.IsNull());
+        assert(!consensus.aiPoolKeyID.IsNull());
 
         nPruneAfterHeight = 1000;
 
@@ -298,6 +317,14 @@ public:
 
         // The best chain should have at least this much work.
         consensus.nMinimumChainWork = uint256S("0x00");
+
+        // PoUS authorized identity addresses:
+        // aiHubKeyID  = SPdSBBkFNKop3auzvFjGJpaCAdVnMQFyyd (Hub Anchor Gas)
+        // aiPoolKeyID = ScmZ5fYVTADyMcH11CXtf9iC9qVeRHA31M (AI Worker Pool)
+        consensus.aiHubKeyID = CKeyID(uint160(ParseHex("199d24d59b414a597af788a8735c228282dc0f84")));
+        consensus.aiPoolKeyID = CKeyID(uint160(ParseHex("a9bfdee0c1874e4f8f167959166fc89c85316c79")));
+        assert(!consensus.aiHubKeyID.IsNull());
+        assert(!consensus.aiPoolKeyID.IsNull());
 
         consensus.nProtocolV1RetargetingFixedTime = 1395631999;
         consensus.nProtocolV2Time = 1407053625;
