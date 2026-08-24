@@ -3,6 +3,11 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "overviewpage.h"
+#include "airegistry.h"
+#include "main.h"
+#include <QSettings>
+#include <QJsonObject>
+#include <QJsonDocument>
 #include "ui_overviewpage.h"
 
 #include "bitcoinunits.h"
@@ -14,6 +19,7 @@
 #include "transactionfilterproxy.h"
 #include "transactiontablemodel.h"
 #include "walletmodel.h"
+#include "wallet/wallet.h"
 
 #include "chainparams.h"
 
@@ -148,6 +154,13 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
     // Dev-fee row: hidden until network enables treasury in chainparams
     ui->labelDonations->setVisible(false);
     ui->labelDonationsText->setVisible(false);
+
+    // AI Worker & DePIN Overview Poller
+    aiNetworkManager = new QNetworkAccessManager(this);
+    aiWorkerTimer = new QTimer(this);
+    connect(aiWorkerTimer, &QTimer::timeout, this, &OverviewPage::updateAiWorkerOverview);
+    aiWorkerTimer->start(15000); // 15s
+    updateAiWorkerOverview();
 
     connect(ui->listTransactions, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
 
@@ -303,4 +316,89 @@ void OverviewPage::showOutOfSyncWarning(bool fShow)
 {
     ui->labelWalletStatus->setVisible(fShow);
     ui->labelTransactionsStatus->setVisible(fShow);
+}
+
+void OverviewPage::updateAiWorkerOverview()
+{
+    QSettings settings;
+    settings.beginGroup("AIWorker");
+    bool isWorkerEnabled = settings.value("workerEnabled", false).toBool();
+    QString workerToken = settings.value("workerToken").toString().trimmed();
+    settings.endGroup();
+
+    // 1. On-Chain PoUS Consensus Status (Personal Worker Boost)
+    uint32_t localCredits = 0;
+    int localWorkerBoost = 0;
+    if (chainActive.Tip() && pwalletMain) {
+        int height = chainActive.Height();
+        std::set<CKeyID> setKeys;
+        pwalletMain->GetKeys(setKeys);
+        for (std::set<CKeyID>::const_iterator it = setKeys.begin(); it != setKeys.end(); ++it) {
+            uint32_t c = GetWorkerCreditsInWindow(*it, height);
+            if (c > localCredits) {
+                localCredits = c;
+            }
+        }
+        localWorkerBoost = GetWorkerPoUSBoost(localCredits);
+    }
+
+    if (localWorkerBoost > 0) {
+        ui->labelAiBoostValue->setText(QString("+%1% (%2 tasks)").arg(localWorkerBoost).arg(localCredits));
+        ui->labelAiBoostValue->setStyleSheet("color: #16a34a; font-weight: bold; font-size: 11px;");
+    } else {
+        ui->labelAiBoostValue->setText("0% (Standby)");
+        ui->labelAiBoostValue->setStyleSheet("color: #64748b; font-weight: 500; font-size: 11px;");
+    }
+
+    // 2. Status Badge
+    if (!isWorkerEnabled) {
+        ui->labelAiWorkerBadge->setText("○ STANDBY");
+        ui->labelAiWorkerBadge->setStyleSheet("background-color: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 8px; font-weight: 600; font-size: 11px;");
+    } else {
+        ui->labelAiWorkerBadge->setText("● ACTIVE");
+        ui->labelAiWorkerBadge->setStyleSheet("background-color: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; border-radius: 4px; padding: 2px 8px; font-weight: 600; font-size: 11px;");
+    }
+
+    // 3. Query Hub API if Worker Token is configured
+    if (workerToken.isEmpty()) {
+        return;
+    }
+
+    QString hubUrl = settings.value("hubBaseUrl", "https://quavence.com").toString().trimmed();
+    if (hubUrl.isEmpty()) {
+        hubUrl = "https://quavence.com";
+    }
+
+    QUrl url(hubUrl + "/api/ai/nodes/self/overview");
+    QNetworkRequest req(url);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    req.setRawHeader("Authorization", QString("Bearer %1").arg(workerToken).toUtf8());
+
+    QNetworkReply *reply = aiNetworkManager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            return;
+        }
+
+        QByteArray data = reply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        if (!doc.isObject()) return;
+
+        QJsonObject root = doc.object();
+        if (!root.value("success").toBool()) return;
+
+        QJsonObject payload = root.value("data").toObject();
+        QJsonObject tasks = payload.value("tasks").toObject();
+        QJsonObject rewards = payload.value("rewards").toObject();
+
+        int doneToday = tasks.value("doneToday").toInt(tasks.value("done_today").toInt(0));
+        int totalDone = tasks.value("done").toInt(0);
+        double accrued = rewards.value("accrued_amount").toDouble(rewards.value("accruedAmount").toDouble(0.0));
+        double paid = rewards.value("paid_amount").toDouble(rewards.value("paidAmount").toDouble(0.0));
+
+        ui->labelAiTasksValue->setText(QString("Today: %1  ·  Total: %2").arg(doneToday).arg(totalDone));
+        ui->labelAiAccruedValue->setText(QString("%1 QVNC").arg(QString::number(accrued, 'f', 8)));
+        ui->labelAiPaidValue->setText(QString("%1 QVNC").arg(QString::number(paid, 'f', 8)));
+    });
 }

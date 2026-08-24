@@ -84,6 +84,7 @@ public:
     std::string GetAiWorkerPoolAddress() const;
     CScript GetAiWorkerPoolScript() const;
     int GetAiWorkerPoolPercent() const { return nAiWorkerPoolPercent; }
+    int GetDevFundActivationHeight() const { return nDevFundActivationHeight; }
 protected:
     CChainParams() : nDevFundDonationPercent(0) {}
 
@@ -107,6 +108,7 @@ protected:
     std::vector<std::string> vAiWorkerPoolAddress;
     int nAiWorkerPoolPercent = 30;
     unsigned int nDevFundDonationPercent;
+    int nDevFundActivationHeight = 91450;
 };
 
 /**

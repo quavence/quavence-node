@@ -1,0 +1,615 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>AIWorkerPage</class>
+ <widget class="QWidget" name="AIWorkerPage">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>920</width>
+    <height>640</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Quavence AI Worker &amp; DePIN Node</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">
+    QWidget {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: #1e293b;
+    }
+    QGroupBox {
+        font-size: 13px;
+        font-weight: 600;
+        color: #1e40af;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        margin-top: 18px;
+        padding-top: 14px;
+        background-color: #ffffff;
+    }
+    QGroupBox::title {
+        subcontrol-origin: margin;
+        subcontrol-position: top left;
+        left: 12px;
+        padding: 0 6px;
+        background-color: #ffffff;
+    }
+    QLineEdit, QComboBox {
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 6px 10px;
+        background-color: #f8fafc;
+        color: #0f172a;
+        font-size: 12px;
+    }
+    QLineEdit:focus, QComboBox:focus {
+        border: 1px solid #2563eb;
+        background-color: #ffffff;
+    }
+    QPushButton {
+        background-color: #2563eb;
+        color: #ffffff;
+        border: none;
+        border-radius: 6px;
+        padding: 7px 14px;
+        font-weight: 600;
+        font-size: 12px;
+    }
+    QPushButton:hover {
+        background-color: #1d4ed8;
+    }
+    QPushButton:pressed {
+        background-color: #1e40af;
+    }
+    QPushButton:disabled {
+        background-color: #94a3b8;
+    }
+    QPlainTextEdit {
+        background-color: #0f172a;
+        color: #e2e8f0;
+        font-family: "Cascadia Code", "Consolas", "Courier New", monospace;
+        font-size: 11px;
+        border: 1px solid #1e293b;
+        border-radius: 6px;
+        padding: 8px;
+    }
+   </string>
+  </property>
+  <layout class="QVBoxLayout" name="mainVerticalLayout">
+   <property name="spacing">
+    <number>12</number>
+   </property>
+   <property name="leftMargin">
+    <number>16</number>
+   </property>
+   <property name="topMargin">
+    <number>16</number>
+   </property>
+   <property name="rightMargin">
+    <number>16</number>
+   </property>
+   <property name="bottomMargin">
+    <number>16</number>
+   </property>
+   <item>
+    <!-- Header Card -->
+    <widget class="QFrame" name="headerFrame">
+     <property name="styleSheet">
+      <string notr="true">
+       QFrame#headerFrame {
+           background-color: transparent;
+           border: none;
+           padding: 0px 0px 6px 0px;
+       }
+      </string>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::StyledPanel</enum>
+     </property>
+     <layout class="QHBoxLayout" name="headerLayout">
+      <property name="leftMargin">
+       <number>6</number>
+      </property>
+      <property name="topMargin">
+       <number>6</number>
+      </property>
+      <property name="rightMargin">
+       <number>6</number>
+      </property>
+      <property name="bottomMargin">
+       <number>6</number>
+      </property>
+      <item>
+       <layout class="QVBoxLayout" name="headerTextLayout">
+        <property name="spacing">
+         <number>3</number>
+        </property>
+        <item>
+         <widget class="QLabel" name="labelHeaderTitle">
+          <property name="font">
+           <font>
+            <pointsize>13</pointsize>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">color: #0f172a;</string>
+          </property>
+          <property name="text">
+           <string>Quavence DePIN AI Worker &amp; PoUS Consensus</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="labelHeaderSubtitle">
+          <property name="styleSheet">
+           <string notr="true">color: #64748b; font-size: 12px;</string>
+          </property>
+          <property name="text">
+           <string>Autonomous DePIN worker node for decentralized AI task execution and on-chain PoUS consensus validation.</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="headerActionsLayout">
+        <property name="spacing">
+         <number>8</number>
+        </property>
+        <item>
+         <widget class="QLabel" name="labelNodeStatusBadge">
+          <property name="minimumSize">
+           <size>
+            <width>110</width>
+            <height>32</height>
+           </size>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">background-color: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 10px; font-weight: 600; font-size: 11px;</string>
+          </property>
+          <property name="text">
+           <string>○ STANDBY</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnToggleWorker">
+          <property name="minimumSize">
+           <size>
+            <width>115</width>
+            <height>32</height>
+           </size>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">background-color: #2563eb; color: #ffffff; border: none; border-radius: 4px; padding: 4px 14px; font-weight: 600; font-size: 12px;</string>
+          </property>
+          <property name="text">
+           <string>Start Worker</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="panelsLayout">
+     <property name="spacing">
+      <number>12</number>
+     </property>
+     <item>
+      <!-- Left Box: Local AI Inference Runtime -->
+      <widget class="QGroupBox" name="groupInference">
+       <property name="title">
+        <string>1. Local AI Inference Engine</string>
+       </property>
+       <layout class="QVBoxLayout" name="inferenceLayout">
+        <property name="spacing">
+         <number>10</number>
+        </property>
+        <property name="leftMargin">
+         <number>14</number>
+        </property>
+        <property name="topMargin">
+         <number>14</number>
+        </property>
+        <property name="rightMargin">
+         <number>14</number>
+        </property>
+        <property name="bottomMargin">
+         <number>14</number>
+        </property>
+
+        <item>
+         <layout class="QFormLayout" name="formInference">
+          <property name="verticalSpacing">
+           <number>8</number>
+          </property>
+          <property name="horizontalSpacing">
+           <number>10</number>
+          </property>
+          <item row="0" column="0">
+           <widget class="QLabel" name="labelProvider">
+            <property name="text">
+             <string>Provider:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QComboBox" name="comboProvider"/>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="labelEndpoint">
+            <property name="text">
+             <string>Endpoint URL:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QLineEdit" name="editEndpointUrl">
+            <property name="text">
+             <string>http://127.0.0.1:1234/v1</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="labelModel">
+            <property name="text">
+             <string>Active Model:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QComboBox" name="comboModel"/>
+          </item>
+          <item row="3" column="0">
+           <widget class="QLabel" name="labelWorkerToken">
+            <property name="text">
+             <string>Worker Token:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1">
+           <layout class="QHBoxLayout" name="tokenLayout">
+            <property name="spacing">
+             <number>6</number>
+            </property>
+            <item>
+             <widget class="QLineEdit" name="editWorkerToken">
+              <property name="readOnly">
+               <bool>true</bool>
+              </property>
+              <property name="echoMode">
+               <enum>QLineEdit::Password</enum>
+              </property>
+              <property name="placeholderText">
+               <string>Optional Hub Token (AI_NODE_TOKEN)</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btnToggleTokenVisibility">
+              <property name="maximumSize">
+               <size>
+                <width>36</width>
+                <height>32</height>
+               </size>
+              </property>
+              <property name="toolTip">
+               <string>Show / Hide Token</string>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">background-color: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px;</string>
+              </property>
+              <property name="text">
+               <string>👁️</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btnEditToken">
+              <property name="minimumSize">
+               <size>
+                <width>55</width>
+                <height>32</height>
+               </size>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">background-color: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 10px; font-weight: 500;</string>
+              </property>
+              <property name="text">
+               <string>Edit</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnCheckConnection">
+          <property name="text">
+           <string>Test Connection &amp;&amp; Validate Policy</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="labelRuntimeStatus">
+          <property name="styleSheet">
+           <string notr="true">color: #64748b; font-size: 11px;</string>
+          </property>
+          <property name="text">
+           <string>Click "Test Connection &amp;&amp; Validate Policy" to check local runtime.</string>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="spacerInference">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>10</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <!-- Right Box: PoUS Consensus -->
+      <widget class="QGroupBox" name="groupPoUS">
+       <property name="title">
+        <string>2. Proof-of-Useful-Stake (PoUS) Consensus</string>
+       </property>
+       <layout class="QVBoxLayout" name="pousLayout">
+        <property name="spacing">
+         <number>10</number>
+        </property>
+        <property name="leftMargin">
+         <number>14</number>
+        </property>
+        <property name="topMargin">
+         <number>14</number>
+        </property>
+        <property name="rightMargin">
+         <number>14</number>
+        </property>
+        <property name="bottomMargin">
+         <number>14</number>
+        </property>
+        <item>
+         <layout class="QFormLayout" name="formPoUS">
+          <property name="verticalSpacing">
+           <number>10</number>
+          </property>
+          <property name="horizontalSpacing">
+           <number>10</number>
+          </property>
+          <item row="0" column="0">
+           <widget class="QLabel" name="labelLinkedAddressTitle">
+            <property name="text">
+             <string>Linked Address:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QComboBox" name="comboLinkedAddress"/>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="labelAttestationTitle">
+            <property name="text">
+             <string>Attestations in 24h Window (1,440 blocks):</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QLabel" name="labelAttestationCount">
+            <property name="font">
+             <font>
+              <weight>75</weight>
+              <bold>true</bold>
+             </font>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">color: #0f172a; font-size: 13px;</string>
+            </property>
+            <property name="text">
+             <string>0 attestations</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="labelBoostTitle">
+            <property name="text">
+             <string>PoUS Staking Weight Boost (bnWeight):</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QLabel" name="labelBoostValue">
+            <property name="font">
+             <font>
+              <weight>75</weight>
+              <bold>true</bold>
+             </font>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">color: #2563eb; font-size: 14px;</string>
+            </property>
+            <property name="text">
+             <string>+0%</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QProgressBar" name="progressBoost">
+          <property name="maximum">
+           <number>50</number>
+          </property>
+          <property name="value">
+           <number>0</number>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">
+            QProgressBar {
+                border: 1px solid #cbd5e1;
+                border-radius: 5px;
+                text-align: center;
+                background-color: #f1f5f9;
+                color: #0f172a;
+                font-size: 11px;
+                font-weight: 600;
+                height: 18px;
+            }
+            QProgressBar::chunk {
+                background-color: #2563eb;
+                border-radius: 4px;
+            }
+           </string>
+          </property>
+          <property name="format">
+           <string>PoUS Boost: %v% (Max: 50%)</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="labelPoUSNote">
+          <property name="styleSheet">
+           <string notr="true">color: #64748b; font-size: 11px; line-height: 1.4;</string>
+          </property>
+          <property name="text">
+           <string>★ Attestations within the 24h rolling window (1,440 blocks) dynamically boost staking weight (+20% for 1+, +35% for 5+, +50% for 10+ attestations).</string>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="spacerPoUS">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>10</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <!-- Log Box -->
+    <widget class="QGroupBox" name="groupLogs">
+     <property name="title">
+      <string>3. Live Activity &amp;&amp; Diagnostics Log</string>
+     </property>
+     <layout class="QVBoxLayout" name="logsLayout">
+      <property name="spacing">
+       <number>8</number>
+      </property>
+      <property name="leftMargin">
+       <number>12</number>
+      </property>
+      <property name="topMargin">
+       <number>12</number>
+      </property>
+      <property name="rightMargin">
+       <number>12</number>
+      </property>
+      <property name="bottomMargin">
+       <number>12</number>
+      </property>
+      <item>
+       <widget class="QPlainTextEdit" name="textLog">
+        <property name="readOnly">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="logControlsLayout">
+        <item>
+         <widget class="QLabel" name="labelHeartbeat">
+          <property name="styleSheet">
+           <string notr="true">color: #64748b; font-size: 11px;</string>
+          </property>
+          <property name="text">
+           <string>Node heartbeat active (every 30s)</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="spacerLogs">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnCopyLogs">
+          <property name="styleSheet">
+           <string notr="true">background-color: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; font-weight: 500;</string>
+          </property>
+          <property name="text">
+           <string>Copy Logs</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnClearLogs">
+          <property name="styleSheet">
+           <string notr="true">background-color: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; font-weight: 500;</string>
+          </property>
+          <property name="text">
+           <string>Clear</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

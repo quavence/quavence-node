@@ -302,6 +302,13 @@ void BitcoinGUI::createActions()
     historyAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_4));
     tabGroup->addAction(historyAction);
 
+    aiWorkerAction = new QAction(tr("&AI Worker"), this);
+    aiWorkerAction->setStatusTip(tr("Manage DePIN AI worker node and monitor PoUS staking boost"));
+    aiWorkerAction->setToolTip(aiWorkerAction->statusTip());
+    aiWorkerAction->setCheckable(true);
+    aiWorkerAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_5));
+    tabGroup->addAction(aiWorkerAction);
+
     refreshToolbarTabIcons();
     connect(tabGroup, SIGNAL(triggered(QAction*)), this, SLOT(updateToolbarTabIcon(QAction*)));
 
@@ -320,6 +327,8 @@ void BitcoinGUI::createActions()
     connect(receiveCoinsMenuAction, SIGNAL(triggered()), this, SLOT(gotoReceiveCoinsPage()));
     connect(historyAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(historyAction, SIGNAL(triggered()), this, SLOT(gotoHistoryPage()));
+    connect(aiWorkerAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    connect(aiWorkerAction, SIGNAL(triggered()), this, SLOT(gotoAIWorkerPage()));
 #endif // ENABLE_WALLET
 
     quitAction = new QAction(platformStyle->TextColorIcon(":/icons/quit"), tr("E&xit"), this);
@@ -415,6 +424,7 @@ void BitcoinGUI::refreshToolbarTabIcons()
         {sendCoinsAction, GUIUtil::BrandToolbarIcon::Send},
         {receiveCoinsAction, GUIUtil::BrandToolbarIcon::Receive},
         {historyAction, GUIUtil::BrandToolbarIcon::Transactions},
+        {aiWorkerAction, GUIUtil::BrandToolbarIcon::AIWorker},
     };
     for (const TabIcon &tab : tabs) {
         if (!tab.action)
@@ -490,6 +500,7 @@ void BitcoinGUI::createToolBars()
         toolbar->addAction(sendCoinsAction);
         toolbar->addAction(receiveCoinsAction);
         toolbar->addAction(historyAction);
+        toolbar->addAction(aiWorkerAction);
         overviewAction->setChecked(true);
     }
 }
@@ -589,6 +600,7 @@ void BitcoinGUI::setWalletActionsEnabled(bool enabled)
     receiveCoinsAction->setEnabled(enabled);
     receiveCoinsMenuAction->setEnabled(enabled);
     historyAction->setEnabled(enabled);
+    aiWorkerAction->setEnabled(enabled);
     encryptWalletAction->setEnabled(enabled);
     backupWalletAction->setEnabled(enabled);
     changePassphraseAction->setEnabled(enabled);
@@ -720,6 +732,12 @@ void BitcoinGUI::gotoOverviewPage()
 {
     overviewAction->setChecked(true);
     if (walletFrame) walletFrame->gotoOverviewPage();
+}
+
+void BitcoinGUI::gotoAIWorkerPage()
+{
+    aiWorkerAction->setChecked(true);
+    if (walletFrame) walletFrame->gotoAIWorkerPage();
 }
 
 void BitcoinGUI::gotoHistoryPage()

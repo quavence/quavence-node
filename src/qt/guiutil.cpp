@@ -615,6 +615,27 @@ QIcon txTypeDotIcon(const QColor &color, int diameter)
 
 namespace {
 
+
+static QPainterPath toolbarAIWorkerShape()
+{
+    QPainterPath path;
+    // Central chip body (rounded rectangle)
+    path.addRoundedRect(QRectF(7, 7, 10, 10), 2, 2);
+    // Pins top
+    path.addRect(QRectF(9, 4, 1.5, 3));
+    path.addRect(QRectF(13.5, 4, 1.5, 3));
+    // Pins bottom
+    path.addRect(QRectF(9, 17, 1.5, 3));
+    path.addRect(QRectF(13.5, 17, 1.5, 3));
+    // Pins left
+    path.addRect(QRectF(4, 9, 3, 1.5));
+    path.addRect(QRectF(4, 13.5, 3, 1.5));
+    // Pins right
+    path.addRect(QRectF(17, 9, 3, 1.5));
+    path.addRect(QRectF(17, 13.5, 3, 1.5));
+    return path;
+}
+
 static QPainterPath toolbarOverviewShape()
 {
     QPainterPath path;
@@ -744,6 +765,9 @@ QIcon brandToolbarIcon(BrandToolbarIcon icon, const QColor &color)
         break;
     case BrandToolbarIcon::Transactions:
         painter.drawPath(toolbarTransactionsShape());
+        break;
+    case BrandToolbarIcon::AIWorker:
+        painter.drawPath(toolbarAIWorkerShape());
         break;
     }
 

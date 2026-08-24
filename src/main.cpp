@@ -2684,6 +2684,8 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     // add this block to the view's block chain
     view.SetBestBlock(pindex->GetBlockHash());
 
+    RegisterAiAttestationsInBlock(block, pindex->nHeight, block.GetBlockTime());
+
     int64_t nTime5 = GetTimeMicros(); nTimeIndex += nTime5 - nTime4;
     LogPrint("bench", "    - Index writing: %.2fms [%.2fs]\n", 0.001 * (nTime5 - nTime4), nTimeIndex * 0.000001);
 
@@ -4027,7 +4029,6 @@ static bool AcceptBlock(const CBlock& block, CValidationState& state, const CCha
         return state.DoS(100, error("%s: reject proof-of-work at height %d",  __func__, nHeight),
                         REJECT_INVALID, "bad-pow-height");
 
-    RegisterAiAttestationsInBlock(block, pindex->nHeight, block.GetBlockTime());
     // Write block to history file
     try {
         unsigned int nBlockSize = ::GetSerializeSize(block, SER_DISK, CLIENT_VERSION);

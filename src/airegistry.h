@@ -10,44 +10,71 @@
 #include "primitives/transaction.h"
 #include "script/standard.h"
 #include "sync.h"
+#include "pubkey.h"
 #include <map>
 #include <set>
 #include <vector>
 
 class CChainParams;
 
-static const int AI_ATTESTATION_WINDOW = 1440;       // ~24 hours at 60s blocks
-static const int MAX_AI_BOOST_PERCENT = 50;           // maximum 50% boost
-static const int BASE_AI_BOOST_PERCENT = 20;          // base 20% boost
-static const int MIN_ATTESTATIONS_FOR_BOOST = 1;      // minimum attestations to qualify
-static const unsigned char AI_MAGIC[4] = {'Q', 'V', 'A', 'I'};
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+static const int AI_ATTESTATION_WINDOW    = 1440;   // ~24h at 60s blocks
+static const int MAX_AI_BOOST_PERCENT     = 50;
+static const int BASE_AI_BOOST_PERCENT    = 20;
+static const int MIN_ATTESTATIONS_FOR_BOOST = 1;
+
+// Magic bytes for Hub attestation OP_RETURN
+static const unsigned char AI_MAGIC[4]   = {'Q','V','A','I'};
+
+// Magic bytes for Pool reward marker OP_RETURN
+static const unsigned char QVRE_MAGIC[4] = {'Q','V','R','E'};
+
+// ─── Structs ─────────────────────────────────────────────────────────────────
 
 struct AiAttestationRecord {
-    uint256 txid;
-    int blockHeight;
-    int64_t blockTime;
-    uint256 consensusHash;
-    uint8_t taskType;
-    uint8_t workerCount;
-    uint8_t agreementRatio;
+    uint256  txid;
+    int      blockHeight;
+    int64_t  blockTime;
+    uint256  consensusHash;
+    uint8_t  version;
+    uint8_t  taskType;
+    uint8_t  workerCount;
+    uint8_t  agreementRatio;
     uint32_t refBlockHeight;
 };
 
-// Extracts AI attestation from a transaction output if OP_RETURN contains QVAI magic
+// ─── Parsing ─────────────────────────────────────────────────────────────────
+
 bool ExtractAiAttestation(const CTxOut& out, AiAttestationRecord& record);
+bool HasPoUSRewardMarker(const CTransaction& tx);
 
-// Evaluates whether a staking prevout qualifies for Proof-of-Useful-Stake boost
-int GetAiStakeBoost(const COutPoint& prevout, const CBlockIndex* pindexPrev);
+// ─── Authorization ───────────────────────────────────────────────────────────
 
-// Attestation count and active boost helpers for consensus query
-int GetAiAttestationsCountInWindow(int currentHeight);
-int GetActiveAiStakeBoost(int currentHeight);
+bool IsAuthorizedAiHubTx(const CTransaction& tx);
+bool IsAuthorizedAiPoolTx(const CTransaction& tx);
+bool IsValidAiAttestationTx(const CTransaction& tx);
+bool IsValidPoUSRewardTx(const CTransaction& tx);
 
-// Connect / disconnect block updates to the attestation registry
+// ─── Registry lifecycle ──────────────────────────────────────────────────────
+
 void RegisterAiAttestationsInBlock(const CBlock& block, int nHeight, int64_t nTime);
 void UnregisterAiAttestationsInBlock(const CBlock& block, int nHeight);
 
-// Scans active chain blocks within attestation window and warms up the in-memory registry on node startup
+// ─── Query API ───────────────────────────────────────────────────────────────
+
+int      GetAiAttestationsCountInWindow(int currentHeight);
+uint32_t GetWorkerCreditsInWindow(const CKeyID& workerID, int currentHeight);
+int      GetWorkerPoUSBoost(uint32_t credits);
+
+// Main consensus boost calculation by stake scriptPubKey (zero disk I/O)
+int GetAiStakeBoost(const CScript& stakeScript, const CBlockIndex* pindexPrev);
+
+// Global metric for RPC / logging
+int GetActiveAiStakeBoost(int currentHeight);
+
+// ─── Startup ─────────────────────────────────────────────────────────────────
+
 void WarmupAiRegistry(const CChainParams& chainparams);
 
 #endif // BITCOIN_AIREGISTRY_H

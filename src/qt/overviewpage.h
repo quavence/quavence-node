@@ -9,6 +9,9 @@
 
 #include <QWidget>
 #include <memory>
+#include <QTimer>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
 
 class ClientModel;
 class TransactionFilterProxy;
@@ -62,6 +65,8 @@ private:
 
     TxViewDelegate *txdelegate;
     std::unique_ptr<TransactionFilterProxy> filter;
+    QTimer *aiWorkerTimer;
+    QNetworkAccessManager *aiNetworkManager;
 
 private Q_SLOTS:
     void updateDisplayUnit();
@@ -69,6 +74,7 @@ private Q_SLOTS:
     void updateAlerts(const QString &warnings);
     void updateWatchOnlyLabels(bool showWatchOnly);
     void handleOutOfSyncWarningClicks();
+    void updateAiWorkerOverview();
 };
 
 #endif // BITCOIN_QT_OVERVIEWPAGE_H

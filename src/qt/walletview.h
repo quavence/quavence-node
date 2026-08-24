@@ -12,6 +12,7 @@
 class BitcoinGUI;
 class ClientModel;
 class OverviewPage;
+class AIWorkerPage;
 class PlatformStyle;
 class ReceiveCoinsDialog;
 class SendCoinsDialog;
@@ -60,6 +61,7 @@ private:
     WalletModel *walletModel;
 
     OverviewPage *overviewPage;
+    AIWorkerPage *aiWorkerPage;
     QWidget *transactionsPage;
     ReceiveCoinsDialog *receiveCoinsPage;
     SendCoinsDialog *sendCoinsPage;
@@ -77,6 +79,8 @@ public Q_SLOTS:
     void gotoOverviewPage();
     /** Switch to history (transactions) page */
     void gotoHistoryPage();
+    /** Switch to AI worker / DePIN page */
+    void gotoAIWorkerPage();
     /** Switch to receive coins page */
     void gotoReceiveCoinsPage();
     /** Switch to send coins page */
