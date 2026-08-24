@@ -2330,6 +2330,8 @@ bool DisconnectBlock(const CBlock& block, CValidationState& state, const CBlockI
         }
     }
 
+    UnregisterAiAttestationsInBlock(block, pindex->nHeight);
+
     // move best block pointer to prevout block
     view.SetBestBlock(pindex->pprev->GetBlockHash());
 

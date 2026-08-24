@@ -38,6 +38,7 @@
 #include "utilmoneystr.h"
 #include "utilstrencodings.h"
 #include "validationinterface.h"
+#include "airegistry.h"
 #include "quavence_build.h"
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
@@ -1472,6 +1473,9 @@ bool AppInit2(Config& config, boost::thread_group& threadGroup, CScheduler& sche
     if (!est_filein.IsNull())
         mempool.ReadFeeEstimates(est_filein);
     fFeeEstimatesInitialized = true;
+
+    // Proof-of-Useful-Stake: Warmup attestation cache from active blockchain
+    WarmupAiRegistry(chainparams);
 
     // ********************************************************* Step 8: load wallet
 
