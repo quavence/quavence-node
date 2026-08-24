@@ -4,6 +4,8 @@
 
 #include "airegistry.h"
 #include "util.h"
+#include "main.h"
+#include "chainparams.h"
 #include "script/script.h"
 #include <algorithm>
 
@@ -17,7 +19,6 @@ bool ExtractAiAttestation(const CTxOut& out, AiAttestationRecord& record)
         return false;
     }
 
-    // Parse raw data from OP_RETURN script
     CScript::const_iterator pc = script.begin() + 1;
     opcodetype opcode;
     std::vector<unsigned char> data;
@@ -26,7 +27,6 @@ bool ExtractAiAttestation(const CTxOut& out, AiAttestationRecord& record)
         return false;
     }
 
-    // Check 4-byte magic: "QVAI"
     if (data[0] != AI_MAGIC[0] || data[1] != AI_MAGIC[1] ||
         data[2] != AI_MAGIC[2] || data[3] != AI_MAGIC[3]) {
         return false;
@@ -68,7 +68,6 @@ void RegisterAiAttestationsInBlock(const CBlock& block, int nHeight, int64_t nTi
         mapHeightToAttestations[nHeight] = blockAttestations;
     }
 
-    // Prune entries older than the rolling window
     int pruneHeight = nHeight - (AI_ATTESTATION_WINDOW * 2);
     while (!mapHeightToAttestations.empty() && mapHeightToAttestations.begin()->first < pruneHeight) {
         mapHeightToAttestations.erase(mapHeightToAttestations.begin());
@@ -81,19 +80,12 @@ void UnregisterAiAttestationsInBlock(const CBlock& block, int nHeight)
     mapHeightToAttestations.erase(nHeight);
 }
 
-int GetAiStakeBoost(const COutPoint& prevout, const CBlockIndex* pindexPrev)
+int GetAiAttestationsCountInWindow(int currentHeight)
 {
-    if (!pindexPrev) {
-        return 0;
-    }
-
     LOCK(cs_airegistry);
 
-    int currentHeight = pindexPrev->nHeight;
     int minHeight = std::max(0, currentHeight - AI_ATTESTATION_WINDOW);
-
     int qualifyingAttestations = 0;
-    int totalAgreement = 0;
 
     for (std::map<int, std::vector<AiAttestationRecord> >::const_iterator it = mapHeightToAttestations.lower_bound(minHeight);
          it != mapHeightToAttestations.end() && it->first <= currentHeight; ++it) {
@@ -101,16 +93,80 @@ int GetAiStakeBoost(const COutPoint& prevout, const CBlockIndex* pindexPrev)
             const AiAttestationRecord& rec = it->second[i];
             if (rec.workerCount >= 1 && rec.agreementRatio >= 178) { // >= 70% agreement (178/255)
                 qualifyingAttestations++;
-                totalAgreement += rec.agreementRatio;
             }
         }
     }
 
+    return qualifyingAttestations;
+}
+
+int GetActiveAiStakeBoost(int currentHeight)
+{
+    int qualifyingAttestations = GetAiAttestationsCountInWindow(currentHeight);
     if (qualifyingAttestations < MIN_ATTESTATIONS_FOR_BOOST) {
         return 0;
     }
 
-    // Base boost + scale based on attestation density up to MAX_AI_BOOST_PERCENT (50%)
     int scaledBoost = BASE_AI_BOOST_PERCENT + std::min(30, qualifyingAttestations * 5);
     return std::min(MAX_AI_BOOST_PERCENT, scaledBoost);
+}
+
+int GetAiStakeBoost(const COutPoint& prevout, const CBlockIndex* pindexPrev)
+{
+    if (!pindexPrev) {
+        return 0;
+    }
+    return GetActiveAiStakeBoost(pindexPrev->nHeight);
+}
+
+void WarmupAiRegistry(const CChainParams& chainparams)
+{
+    LOCK(cs_airegistry);
+
+    int tipHeight = chainActive.Height();
+    if (tipHeight <= 0) {
+        LogPrintf("AI Registry: Chain is empty, skipping warmup\n");
+        return;
+    }
+
+    int startHeight = std::max(1, tipHeight - (AI_ATTESTATION_WINDOW * 2));
+    LogPrintf("AI Registry: Warming up attestation cache from height %d to %d...\n", startHeight, tipHeight);
+
+    int loadedAttestations = 0;
+    int blocksScanned = 0;
+
+    for (int h = startHeight; h <= tipHeight; h++) {
+        CBlockIndex* pindex = chainActive[h];
+        if (!pindex) continue;
+
+        CBlock block;
+        if (!ReadBlockFromDisk(block, pindex, chainparams.GetConsensus())) {
+            LogPrintf("AI Registry: Warning - failed to read block at height %d during warmup\n", h);
+            continue;
+        }
+
+        blocksScanned++;
+        std::vector<AiAttestationRecord> blockAttestations;
+        for (size_t i = 0; i < block.vtx.size(); i++) {
+            const CTransaction& tx = block.vtx[i];
+            for (size_t j = 0; j < tx.vout.size(); j++) {
+                AiAttestationRecord rec;
+                if (ExtractAiAttestation(tx.vout[j], rec)) {
+                    rec.txid = tx.GetHash();
+                    rec.blockHeight = h;
+                    rec.blockTime = pindex->GetBlockTime();
+                    blockAttestations.push_back(rec);
+                    loadedAttestations++;
+                }
+            }
+        }
+
+        if (!blockAttestations.empty()) {
+            mapHeightToAttestations[h] = blockAttestations;
+        }
+    }
+
+    int activeBoost = GetActiveAiStakeBoost(tipHeight);
+    LogPrintf("AI Registry: Warmup complete. Scanned %d blocks, loaded %d attestations. Active PoUS Stake Boost at height %d: +%d%%\n",
+              blocksScanned, loadedAttestations, tipHeight, activeBoost);
 }
