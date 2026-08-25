@@ -183,3 +183,9 @@ src/qt/blackmore-qt.creator
 src/qt/blackmore-qt.creator.user
 src/qt/blackmore-qt.files
 src/qt/blackmore-qt.includes
+
+# Build artifacts
+build-*/
+*.log
+contrib/cross-build-win64-wallet.sh
+

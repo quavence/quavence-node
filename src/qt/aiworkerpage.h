@@ -79,6 +79,9 @@ private:
     bool isTokenEditing;
     bool isModelPolicyCompliant;
     bool isTaskRunning;
+    bool isRuntimeOnline;
+    bool pendingStartAfterProbe;
+    QString preflightStatusMessage;
     QString currentModelName;
     QString workerDeviceId;
     int attestationCount;
