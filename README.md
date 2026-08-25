@@ -11,7 +11,7 @@
 
 ## 🌟 Key Features
 
-* 🤖 **Built-in AI Worker (All-in-One GUI):** Seamlessly connects to local LLM providers (LM Studio, Ollama, OpenAI-compatible APIs) to process RAG knowledge base checks, bounty turn synthesis, and AI consensus tasks.
+* 🤖 **Built-in AI Worker (All-in-One GUI):** Seamlessly connects to local LLM providers (LM Studio, Ollama, OpenAI-compatible APIs) to process RAG knowledge base checks, task composer synthesis, and AI consensus tasks.
 * ⚡ **Proof-of-Useful-Stake (PoUS) & Dynamic Boost:** Stakers running active AI workers receive dynamic staking boosts (up to **+50%**) based on verified task execution within the on-chain attestation registry.
 * 🛡️ **DevFee & AI Staking Pools:** Native protocol-level fee routing to automated security and compute reward pools.
 * 🔀 **Advanced Coin Control & UTXO Split:** Integrated splitting for staking optimization directly within the GUI wallet without arbitrary reserve locks.
