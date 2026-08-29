@@ -56,7 +56,7 @@ namespace {
     }
 
     QString buildHonestAssistantAck(const QString &ownerText, const QJsonObject &draftPatch, const QJsonArray &followUpChips) {
-        bool ru = containsCyrillicText(ownerText);
+        Q_UNUSED(ownerText);
         QStringList filled;
         if (draftPatch.contains("task") && !draftPatch["task"].isNull()) filled.append("Task");
         if (draftPatch.contains("deliverables") && draftPatch["deliverables"].isArray() && !draftPatch["deliverables"].toArray().isEmpty()) filled.append("Deliverables");
@@ -70,24 +70,6 @@ namespace {
         if (!draftPatch.contains("proof") || !draftPatch["proof"].isArray() || draftPatch["proof"].toArray().isEmpty()) empty.append("Proof");
 
         bool hasChips = !followUpChips.isEmpty();
-
-        if (ru) {
-            if (filled.isEmpty()) {
-                return hasChips
-                    ? "Пока без заполнения слева — выбери варианты ниже, чтобы собрать факты."
-                    : "Принял сообщение. Слева пока пусто — допиши бриф или уточни в чате.";
-            }
-            QString head = QString("Принял в draft: %1.").arg(filled.join(", "));
-            if (!empty.isEmpty() && hasChips) {
-                return QString("%1 Ещё пусто: %2 — выбери варианты ниже или допиши слева.").arg(head, empty.join(", "));
-            }
-            if (!empty.isEmpty()) {
-                return QString("%1 Ещё пусто: %2 — допиши слева или уточни в чате.").arg(head, empty.join(", "));
-            }
-            return hasChips
-                ? QString("%1 Проверь proposals слева; варианты ниже — если нужно уточнить.").arg(head)
-                : QString("%1 Проверь proposals слева и Lock.").arg(head);
-        }
 
         if (filled.isEmpty()) {
             return hasChips
@@ -867,12 +849,12 @@ void AIWorkerPage::dispatchTask(const QString &taskId, const QString &taskType, 
             "   - guidance: operator still collecting a brief. Chips + asks only. No draft section fills.\n"
             "   - draft: facts describe hireable work. Extract into sections with sourceFactIds. Always include draftPatch.title when task is filled.\n"
             "7b) DRAFT COMPLETENESS (draft mode): when facts name concrete deliverables (icons, png, 512x512, zip), put each as a deliverables line with sourceFactIds. If acceptance/proof are absent, leave arrays empty and return gaps[].\n"
-            "7c) GAP PROPOSALS (draft mode): if acceptance/proof remain open, return 2-4 followUpChips that HELP CLOSE HOLES for a reviewable bounty. REQUIRED per chip: label (owner language, short choice) + value (English draft line) + section (deliverables|acceptance|proof). Examples: label \"Формат и размер\", value \"All icons delivered as PNG 512x512, in a single zip file\", section \"deliverables\"; label \"Тон\", value \"Clean, modern, minimalist style — no text or gradients\", section \"acceptance\"; label \"Скриншот\", value \"Attach a preview image of the icon set in a folder with filenames\", section \"proof\".\n"
+            "7c) GAP PROPOSALS (draft mode): if acceptance/proof remain open, return 2-4 followUpChips that HELP CLOSE HOLES for a reviewable bounty. REQUIRED per chip: label (owner language, short choice) + value (English draft line) + section (deliverables|acceptance|proof). Examples: label \"Format & Size\", value \"All icons delivered as PNG 512x512, in a single zip file\", section \"deliverables\"; label \"Tone & Style\", value \"Clean, modern, minimalist style — no text or gradients\", section \"acceptance\"; label \"Screenshot\", value \"Attach a preview image of the icon set in a folder with filenames\", section \"proof\".\n"
             "8) CHIPS: concrete Confirm-able choices only — never open questions. Chip labels = owner language; chip values = English draft lines.\n"
             "9) CHAT: short dialogue. Say what was filled vs still empty on the left only when draft mode filled something. Keep assistantMessage in owner language.\n"
             "10) JSON only.\n\n"
             "OUTPUT SHAPE:\n"
-            "{\"mode\":\"draft\",\"assistantMessage\":\"string\",\"draftPatch\":{\"title\":{\"text\":\"string\",\"sourceFactIds\":[\"f_user_1\"]},\"task\":{\"text\":\"string\",\"sourceFactIds\":[\"f_user_1\"]},\"deliverables\":[{\"text\":\"string\",\"sourceFactIds\":[\"f_user_1\"]}],\"acceptance\":[],\"proof\":[],\"gaps\":[{\"section\":\"acceptance\",\"reason\":\"string\"}],\"classification\":{\"domainId\":\"design_creative\",\"subcategoryId\":null,\"typeId\":\"bounty\",\"difficultyId\":\"medium\",\"tagIds\":[],\"platformIds\":[],\"confidence\":0.85}},\"followUpChips\":[{\"label\":\"Формат и размер\",\"value\":\"All icons delivered as PNG 512x512, in a single zip file\",\"section\":\"deliverables\"},{\"label\":\"Тон\",\"value\":\"Clean, modern, minimalist style — no text or gradients\",\"section\":\"acceptance\"},{\"label\":\"Скриншот\",\"value\":\"Attach a preview image of the icon set in a folder with filenames\",\"section\":\"proof\"}]}";
+            "{\"mode\":\"draft\",\"assistantMessage\":\"string\",\"draftPatch\":{\"title\":{\"text\":\"string\",\"sourceFactIds\":[\"f_user_1\"]},\"task\":{\"text\":\"string\",\"sourceFactIds\":[\"f_user_1\"]},\"deliverables\":[{\"text\":\"string\",\"sourceFactIds\":[\"f_user_1\"]}],\"acceptance\":[],\"proof\":[],\"gaps\":[{\"section\":\"acceptance\",\"reason\":\"string\"}],\"classification\":{\"domainId\":\"design_creative\",\"subcategoryId\":null,\"typeId\":\"bounty\",\"difficultyId\":\"medium\",\"tagIds\":[],\"platformIds\":[],\"confidence\":0.85}},\"followUpChips\":[{\"label\":\"Format & Size\",\"value\":\"All icons delivered as PNG 512x512, in a single zip file\",\"section\":\"deliverables\"},{\"label\":\"Tone & Style\",\"value\":\"Clean, modern, minimalist style — no text or gradients\",\"section\":\"acceptance\"},{\"label\":\"Screenshot\",\"value\":\"Attach a preview image of the icon set in a folder with filenames\",\"section\":\"proof\"}]}";
 
         if (resultJson.contains("turn_input") && resultJson["turn_input"].isObject()) {
             currentTurnInput = resultJson["turn_input"].toObject();
@@ -1078,19 +1060,19 @@ QJsonObject AIWorkerPage::parseTaskJsonOutput(const QString &rawText, const QStr
         // If LLM returned empty chips, provide standard consultative proposals for gaps
         if (chips.isEmpty()) {
             QJsonObject chip1;
-            chip1["label"] = ru ? "Формат и размер" : "Format & Size";
+            chip1["label"] = "Format & Size";
             chip1["value"] = "All icons delivered as PNG 512x512, in a single zip file";
             chip1["section"] = "deliverables";
             chips.append(chip1);
 
             QJsonObject chip2;
-            chip2["label"] = ru ? "Тон" : "Tone & Style";
+            chip2["label"] = "Tone & Style";
             chip2["value"] = "Clean, modern, minimalist style — no text or gradients";
             chip2["section"] = "acceptance";
             chips.append(chip2);
 
             QJsonObject chip3;
-            chip3["label"] = ru ? "Скриншот" : "Screenshot";
+            chip3["label"] = "Screenshot";
             chip3["value"] = "Attach a preview image of the icon set in a folder with filenames";
             chip3["section"] = "proof";
             chips.append(chip3);
