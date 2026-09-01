@@ -1,44 +1,29 @@
-# Quavence Node & PoUS AI Worker Qt Wallet (QVNC)
+# Quavence Core Node & PoUS All-in-One Wallet (QVNC)
 
-[![Release](https://img.shields.io/badge/release-v15.0.0-blue.svg)](https://github.com/dtd-tosh/quavence-node/releases)
+[![Release](https://img.shields.io/badge/release-v15.0.0-blue.svg)](https://github.com/quavence/quavence-node/releases)
 [![Consensus](https://img.shields.io/badge/consensus-PoS3.0%20%2B%20PoUS-emerald.svg)](https://quavence.com)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](COPYING)
-[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-lightgrey.svg)](https://quavence.com)
+[![License](https://img.shields.io/badge/license-MIT%20%2F%20BSL--1.1-green.svg)](COPYING)
 
-**Quavence (QVNC)** is a decentralized security and compute network powered by **Proof-of-Useful-Stake (PoUS)**. It combines ultra-fast PoS 3.0 staking with autonomous on-chain AI worker attestation, knowledge-base RAG verification, and real-time staking yield boosts.
-
----
-
-## 🌟 Key Features
-
-* 🤖 **Built-in AI Worker (All-in-One GUI):** Seamlessly connects to local LLM providers (LM Studio, Ollama, OpenAI-compatible APIs) to process RAG knowledge base checks, task composer synthesis, and AI consensus tasks.
-* ⚡ **Proof-of-Useful-Stake (PoUS) & Dynamic Boost:** Stakers running active AI workers receive dynamic staking boosts (up to **+50%**) based on verified task execution within the on-chain attestation registry.
-* 🛡️ **DevFee & AI Staking Pools:** Native protocol-level fee routing to automated security and compute reward pools.
-* 🔀 **Advanced Coin Control & UTXO Split:** Integrated splitting for staking optimization directly within the GUI wallet without arbitrary reserve locks.
-* 🖥️ **Dual Binary Architecture:**
-  * **All-in-One PoUS Qt Wallet:** Full GUI wallet + AI Worker node + Staking boost dashboard.
-  * **Standard Qt Wallet & Headless Node:** Lightweight classic GUI wallet (`quavence-qt`), daemon (`quavenced`), and CLI (`quavence-cli`).
+Quavence (QVNC) is a decentralized security and compute blockchain network powered by **Proof-of-Useful-Stake (PoUS)**. It combines high-throughput PoS 3.0 staking with autonomous on-chain AI worker attestation, knowledge-base RAG verification, and real-time staking yield boosts.
 
 ---
 
-## 🚀 Quick Start & Downloads
+## Key Features
 
-Pre-built standalone binaries for **Windows (Win64)** and **Linux (x86_64)** are available on the [Releases](https://github.com/dtd-tosh/quavence-node/releases) page:
-
-| Platform | Binary | Description |
-| :--- | :--- | :--- |
-| **Windows** | `quavence-qt-pous-allinone-v15.0.exe` | All-in-One GUI Wallet + AI Worker |
-| **Windows** | `quavence-qt-standard-v15.0.exe` | Classic Standard GUI Wallet |
-| **Windows** | `quavenced-v15.0.exe` / `quavence-cli-v15.0.exe` | Headless Daemon & CLI |
-| **Linux** | `quavence-qt-pous-allinone-v15.0` | Linux All-in-One Qt Wallet |
-| **Linux** | `quavence-qt-standard-v15.0` | Linux Classic Standard Qt Wallet |
-| **Linux** | `quavenced-v15.0` / `quavence-cli-v15.0` | Linux Headless Daemon & CLI |
+- **Integrated AI Worker:** Connects to local LLM engines (Ollama, LM Studio, OpenAI-compatible APIs) to process consensus audits, governance proposals, and verification tasks.
+- **Proof-of-Useful-Stake (PoUS):** Stakers operating active AI workers receive dynamic staking boosts (up to **+50%**) based on verified task execution within the on-chain attestation registry.
+- **On-Chain Fee Routing:** Native protocol-level fee allocation to decentralized security and compute reward pools.
+- **Coin Control & Staking Optimization:** Built-in UTXO splitting and coin control for optimized staking weight.
+- **Modular Targets:**
+  - `quavenced`: Headless P2P daemon for servers, validators, and mining pools.
+  - `quavence-cli`: Command-line RPC client.
+  - `quavence-qt`: All-in-One GUI desktop wallet with integrated AI Worker and PoUS dashboard.
 
 ---
 
-## 🛠️ Building From Source
+## Building from Source (Linux / Ubuntu / Debian)
 
-### Prerequisites (Ubuntu / Debian / WSL2)
+### 1. Install Dependencies
 
 ```bash
 sudo apt-get update
@@ -50,59 +35,78 @@ sudo apt-get install -y build-essential libtool autotools-dev automake pkg-confi
     libprotobuf-dev protobuf-compiler libqrencode-dev libdb5.3++-dev libdb5.3++
 ```
 
-### Build Linux Binaries
+### 2. Configure and Build
 
 ```bash
+# Generate build scripts
 ./autogen.sh
+
+# Create build directory
 mkdir build-linux && cd build-linux
+
+# Configure (builds daemon, cli, and Qt wallet)
 ../configure --prefix=/ --disable-bench --disable-tests --enable-wallet --with-gui=qt5
+
+# Compile (adjust -j flag to your CPU core count)
 make -j4
 ```
 
-### Cross-Compile Windows (Win64) Binaries with MinGW
+To compile only the headless server daemon without GUI dependencies:
 
 ```bash
-# Build dependencies
-cd depends
-make HOST=x86_64-w64-mingw32 -j4
-cd ..
-
-# Build Windows binaries
-mkdir build-win64 && cd build-win64
-CONFIG_SITE="$PWD/../depends/x86_64-w64-mingw32/share/config.site" ../configure --prefix=/ --disable-bench --disable-tests --enable-wallet --with-gui=qt5
+../configure --prefix=/ --disable-bench --disable-tests --enable-wallet --without-gui
 make -j4
 ```
+
+Built binaries will be located in `src/`:
+- `src/quavenced`
+- `src/quavence-cli`
+- `src/qt/quavence-qt`
 
 ---
 
-## ⚙️ Configuration & AI Worker Setup
+## Node Configuration
 
-Create `quavence.conf` in your data directory:
-* **Linux:** `~/.quavence/quavence.conf`
-* **Windows:** `%APPDATA%\Quavence\quavence.conf`
+Create the configuration file at `~/.quavence/quavence.conf`:
 
 ```ini
 server=1
 listen=1
 daemon=1
-rpcuser=your_username
-rpcpassword=your_secure_password
+rpcuser=your_rpc_username
+rpcpassword=your_secure_rpc_password
 rpcallowip=127.0.0.1
 rpcport=15715
 port=15714
 staking=1
 ```
 
-### AI Worker Configuration (GUI Wallet):
-1. Launch **Quavence All-in-One Wallet**.
-2. Navigate to the **AI Worker** tab.
-3. Enter your **Node Token** (obtained from the Quavence Community Hub).
-4. Set the **Inference Endpoint** (e.g. `http://127.0.0.1:1234/v1` for LM Studio).
-5. Click **Start Worker** to begin claiming tasks, earning QVNC rewards, and unlocking the +50% PoUS Staking Boost.
+### Running the Node
+
+```bash
+# Start daemon
+./src/quavenced -daemon
+
+# Check blockchain info via CLI
+./src/quavence-cli getblockchaininfo
+
+# Check staking status
+./src/quavence-cli getstakinginfo
+```
 
 ---
 
-## 📄 License
+## AI Worker Setup (GUI Wallet)
 
-- Quavence Blockchain Core, P2P Node, and Qt Wallet are released under the terms of the **MIT License**. See [COPYING](COPYING) for more information.
+1. Launch the All-in-One Wallet: `./src/qt/quavence-qt`
+2. Navigate to the **AI Worker** tab.
+3. Enter your **Node Token** (generated in the Quavence Dashboard).
+4. Set the **Inference Endpoint** (e.g., `http://127.0.0.1:11434` for Ollama or `http://127.0.0.1:1234/v1` for LM Studio).
+5. Click **Start Worker** to connect, process verification tasks, and activate the PoUS Staking Boost.
+
+---
+
+## License
+
+- Quavence Blockchain Core, P2P Node, and Qt Wallet are released under the terms of the **MIT License**. See [COPYING](COPYING) for details.
 - The AI Worker subsystem, Compute Agents, and Attestation protocols are Copyright © Quavence DAO, licensed under the **Business Source License 1.1 (BSL-1.1)**. See [quavence-ai-worker/LICENSE](https://github.com/quavence/quavence-ai-worker/blob/main/LICENSE) for details.
