@@ -104,4 +104,5 @@ staking=1
 
 ## 📄 License
 
-Quavence is released under the terms of the MIT license. See [COPYING](COPYING) for more information.
+- Quavence Blockchain Core, P2P Node, and Qt Wallet are released under the terms of the **MIT License**. See [COPYING](COPYING) for more information.
+- The AI Worker subsystem, Compute Agents, and Attestation protocols are Copyright © Quavence DAO, licensed under the **Business Source License 1.1 (BSL-1.1)**. See [quavence-ai-worker/LICENSE](https://github.com/quavence/quavence-ai-worker/blob/main/LICENSE) for details.
