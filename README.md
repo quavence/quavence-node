@@ -4,7 +4,7 @@
 [![Consensus](https://img.shields.io/badge/consensus-PoS3.0%20%2B%20PoUS-emerald.svg)](https://quavence.com)
 [![License](https://img.shields.io/badge/license-MIT%20%2F%20BSL--1.1-green.svg)](COPYING)
 
-Quavence (QVNC) is a decentralized security and compute blockchain network powered by **Proof-of-Useful-Stake (PoUS)**. It combines high-throughput PoS 3.0 staking with autonomous on-chain AI worker attestation, knowledge-base RAG verification, and real-time staking yield boosts.
+Quavence (QVNC) is a decentralized Layer-1 DePIN AI compute network powered by **Proof-of-Useful-Stake (PoUS)**. It combines high-throughput PoS 3.0 staking with autonomous on-chain AI worker attestation, knowledge-base RAG verification, and real-time staking yield boosts.
 
 ---
 
