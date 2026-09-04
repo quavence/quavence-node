@@ -2,7 +2,7 @@
 
 [![Release](https://img.shields.io/badge/release-v15.0.0-blue.svg)](https://github.com/quavence/quavence-node/releases)
 [![Consensus](https://img.shields.io/badge/consensus-PoS3.0%20%2B%20PoUS-emerald.svg)](https://quavence.com)
-[![License](https://img.shields.io/badge/license-MIT%20%2F%20BSL--1.1-green.svg)](COPYING)
+[![License](https://img.shields.io/badge/license-MIT%20%2F%20BSL--1.1-green.svg)](LICENSE-ADDITIONS)
 
 Quavence (QVNC) is a decentralized Layer-1 DePIN AI compute network powered by **Proof-of-Useful-Stake (PoUS)**. It combines high-throughput PoS 3.0 staking with autonomous on-chain AI worker attestation, knowledge-base RAG verification, and real-time staking yield boosts.
 
@@ -109,4 +109,4 @@ staking=1
 ## License
 
 - Quavence Blockchain Core, P2P Node, and Qt Wallet are released under the terms of the **MIT License**. See [COPYING](COPYING) for details.
-- The AI Worker subsystem, Compute Agents, and Attestation protocols are Copyright © Quavence DAO, licensed under the **Business Source License 1.1 (BSL-1.1)**. See [quavence-ai-worker/LICENSE](https://github.com/quavence/quavence-ai-worker/blob/main/LICENSE) for details.
+- The AI Worker subsystem, Compute Agents, and Attestation protocols are Copyright © Quavence DAO, licensed under the **Business Source License 1.1 (BSL-1.1)**. See [LICENSE-ADDITIONS](LICENSE-ADDITIONS) for details.

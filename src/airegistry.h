@@ -1,6 +1,6 @@
-// Copyright (c) 2026 The Quavence Developers
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2026 The Quavence developers
+// Licensed under the Business Source License 1.1 (BSL-1.1)
+// See LICENSE-ADDITIONS in the root of this repository
 
 #ifndef BITCOIN_AIREGISTRY_H
 #define BITCOIN_AIREGISTRY_H

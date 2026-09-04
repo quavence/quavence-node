@@ -189,3 +189,11 @@ build-*/
 *.log
 contrib/cross-build-win64-wallet.sh
 
+
+# Node runtime data — local only, never commit
+wsl-stake-node/
+wsl-chain-reset-*/
+deleted-wsl-stake-node-*/
+*-stake-node/
+wallet-passphrase.txt
+quavence.conf
