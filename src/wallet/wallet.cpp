@@ -7,6 +7,7 @@
 // Copyright (c) 2016-2018 The Qtum developers
 
 #include "wallet/wallet.h"
+#include "airegistry.h"
 
 #include "chain.h"
 #include "checkpoints.h"
@@ -614,10 +615,17 @@ void CWallet::AvailableCoinsForStaking(std::vector<COutput>& vCoins) const
                 isminetype mine = IsMine(pcoin->vout[i]);
                 if (!(IsSpent(wtxid, i)) && mine != ISMINE_NO &&
                     !IsLockedCoin((*it).first, i) && (pcoin->vout[i].nValue > 0))
+                {
+                    // PoUS Phase 2B: Staking Immunity — never stake a Glyph Carrier UTXO
+                    GlyphCarrierRecord glyphRec;
+                    if (GetTxGlyphCarrier(*pcoin, i, glyphRec))
+                        continue;
+
                     vCoins.push_back(COutput(pcoin, i, nDepth,
                                              ((mine & ISMINE_SPENDABLE) != ISMINE_NO) ||
                                              (mine & ISMINE_WATCH_SOLVABLE) != ISMINE_NO,
                                              (mine & (ISMINE_SPENDABLE | ISMINE_WATCH_SOLVABLE)) != ISMINE_NO));
+                }
             }
         }
     }
@@ -1463,6 +1471,20 @@ void CWallet::SyncTransaction(const CTransaction& tx, const CBlockIndex *pindex,
 
         if (!AddToWalletIfInvolvingMe(tx, pblock, true))
             return; // Not one of ours
+
+        // PoUS Phase 2B: Auto-lock incoming Glyph Carrier UTXOs
+        {
+            GlyphCarrierRecord glyphRec;
+            for (unsigned int i = 0; i < tx.vout.size(); ++i) {
+                if (tx.vout[i].nValue == GLYPH_CARRIER_DUST && IsMine(tx.vout[i])) {
+                    if (GetTxGlyphCarrier(tx, i, glyphRec)) {
+                        LockCoin(COutPoint(tx.GetHash(), i));
+                        LogPrintf("PoUS: Auto-locked Glyph #%u carrier UTXO (%s:%u)\n",
+                                  glyphRec.edition, tx.GetHash().ToString(), i);
+                    }
+                }
+            }
+        }
 
         if (tx.IsCoinStake() && IsFromMe(tx))
             fScanStaleCoinstakes = true;
@@ -2429,10 +2451,19 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
                 if (!(IsSpent(wtxid, i)) && mine != ISMINE_NO &&
                     !IsLockedCoin((*it).first, i) && (pcoin->vout[i].nValue > 0 || fIncludeZeroValue) &&
                     (!coinControl || !coinControl->HasSelected() || coinControl->fAllowOtherInputs || coinControl->IsSelected(COutPoint((*it).first, i))))
-                        vCoins.push_back(COutput(pcoin, i, nDepth,
-                                                 ((mine & ISMINE_SPENDABLE) != ISMINE_NO) ||
-                                                  (coinControl && coinControl->fAllowWatchOnly && (mine & ISMINE_WATCH_SOLVABLE) != ISMINE_NO),
-                                                 (mine & (ISMINE_SPENDABLE | ISMINE_WATCH_SOLVABLE)) != ISMINE_NO));
+                {
+                    // PoUS Phase 2B: Spending Immunity — never auto-select Glyph Carrier UTXOs
+                    GlyphCarrierRecord glyphRec;
+                    if (GetTxGlyphCarrier(*pcoin, i, glyphRec)) {
+                        if (!coinControl || !coinControl->IsSelected(COutPoint((*it).first, i)))
+                            continue; // Absolute exclusion from auto coin selection
+                    }
+
+                    vCoins.push_back(COutput(pcoin, i, nDepth,
+                                             ((mine & ISMINE_SPENDABLE) != ISMINE_NO) ||
+                                              (coinControl && coinControl->fAllowWatchOnly && (mine & ISMINE_WATCH_SOLVABLE) != ISMINE_NO),
+                                             (mine & (ISMINE_SPENDABLE | ISMINE_WATCH_SOLVABLE)) != ISMINE_NO));
+                }
             }
         }
     }
@@ -3101,6 +3132,24 @@ DBErrors CWallet::LoadWallet(bool& fFirstRunRet)
     if (nLoadWalletRet != DB_LOAD_OK)
         return nLoadWalletRet;
     fFirstRunRet = !vchDefaultKey.IsValid();
+
+    // PoUS Phase 2B: Warmup — auto-lock all existing Glyph Carrier UTXOs on startup
+    {
+        LOCK2(cs_main, cs_wallet);
+        GlyphCarrierRecord glyphRec;
+        for (map<uint256, CWalletTx>::const_iterator it = mapWallet.begin();
+             it != mapWallet.end(); ++it)
+        {
+            const CWalletTx& wtx = it->second;
+            for (unsigned int i = 0; i < wtx.vout.size(); ++i) {
+                if (wtx.vout[i].nValue == GLYPH_CARRIER_DUST && IsMine(wtx.vout[i])) {
+                    if (GetTxGlyphCarrier(wtx, i, glyphRec)) {
+                        setLockedCoins.insert(COutPoint(it->first, i));
+                    }
+                }
+            }
+        }
+    }
 
     uiInterface.LoadWallet(this);
 

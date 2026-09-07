@@ -108,6 +108,41 @@ bool ExtractAiAttestation(const CTxOut& out, AiAttestationRecord& record)
     return true;
 }
 
+bool ExtractGlyphRecord(const CTxOut& out, GlyphCarrierRecord& record)
+{
+    const CScript& script = out.scriptPubKey;
+    if (script.empty() || script[0] != OP_RETURN) return false;
+
+    CScript::const_iterator pc = script.begin() + 1;
+    opcodetype opcode;
+    std::vector<unsigned char> data;
+    if (!script.GetOp(pc, opcode, data) || data.size() < 40) return false;
+
+    if (data[0] != GLYPH_MAGIC[0] || data[1] != GLYPH_MAGIC[1] ||
+        data[2] != GLYPH_MAGIC[2] || data[3] != GLYPH_MAGIC[3]) return false;
+
+    if (data[4] != 0x01) return false; // version 1 only
+
+    record.version   = data[4];
+    record.opType    = data[5];
+    record.glyphHash = uint256(std::vector<unsigned char>(data.begin() + 6, data.begin() + 38));
+    record.edition   = (uint16_t)data[38] | ((uint16_t)data[39] << 8);
+    return true;
+}
+
+bool GetTxGlyphCarrier(const CTransaction& tx, unsigned int nOut, GlyphCarrierRecord& record)
+{
+    if (nOut >= tx.vout.size()) return false;
+    if (tx.vout[nOut].nValue != GLYPH_CARRIER_DUST) return false;
+
+    // Find companion OP_RETURN with QVNC magic in same transaction
+    for (size_t i = 0; i < tx.vout.size(); ++i) {
+        if (ExtractGlyphRecord(tx.vout[i], record))
+            return true;
+    }
+    return false;
+}
+
 bool HasPoUSRewardMarker(const CTransaction& tx)
 {
     for (size_t i = 0; i < tx.vout.size(); i++) {

@@ -30,6 +30,10 @@ static const unsigned char AI_MAGIC[4]   = {'Q','V','A','I'};
 // Magic bytes for Pool reward marker OP_RETURN
 static const unsigned char QVRE_MAGIC[4] = {'Q','V','R','E'};
 
+// Magic bytes for PoUS Glyph Carrier OP_RETURN
+static const unsigned char GLYPH_MAGIC[4] = {'Q', 'V', 'N', 'C'};
+static const CAmount GLYPH_CARRIER_DUST   = 10000; // 0.00010000 QVNC
+
 // ─── Structs ─────────────────────────────────────────────────────────────────
 
 struct AiAttestationRecord {
@@ -44,10 +48,19 @@ struct AiAttestationRecord {
     uint32_t refBlockHeight;
 };
 
+struct GlyphCarrierRecord {
+    uint8_t  version;
+    uint8_t  opType;
+    uint256  glyphHash;
+    uint16_t edition;
+};
+
 // ─── Parsing ─────────────────────────────────────────────────────────────────
 
 bool ExtractAiAttestation(const CTxOut& out, AiAttestationRecord& record);
 bool HasPoUSRewardMarker(const CTransaction& tx);
+bool ExtractGlyphRecord(const CTxOut& out, GlyphCarrierRecord& record);
+bool GetTxGlyphCarrier(const CTransaction& tx, unsigned int nOut, GlyphCarrierRecord& record);
 
 // ─── Authorization ───────────────────────────────────────────────────────────
 
