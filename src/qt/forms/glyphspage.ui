@@ -1,0 +1,430 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>GlyphsPage</class>
+ <widget class="QWidget" name="GlyphsPage">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>920</width>
+    <height>640</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>PoUS Glyphs &amp; Artifacts</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">
+    QWidget {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: #1e293b;
+    }
+    QPushButton {
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 7px 14px;
+        background-color: #f8fafc;
+        color: #1e293b;
+        font-weight: 500;
+        font-size: 12px;
+    }
+    QPushButton:hover {
+        background-color: #f1f5f9;
+        border-color: #94a3b8;
+    }
+    QPushButton:pressed {
+        background-color: #e2e8f0;
+    }
+    QPushButton:disabled {
+        background-color: #f1f5f9;
+        color: #94a3b8;
+        border-color: #e2e8f0;
+    }
+    QPushButton#btnTransfer {
+        background-color: #2563eb;
+        color: #ffffff;
+        border: 1px solid #1d4ed8;
+        font-weight: 600;
+    }
+    QPushButton#btnTransfer:hover {
+        background-color: #1d4ed8;
+    }
+    QPushButton#btnTransfer:disabled {
+        background-color: #93c5fd;
+        border-color: #bfdbfe;
+        color: #ffffff;
+    }
+    QTableWidget {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background-color: #ffffff;
+        gridline-color: #f1f5f9;
+        selection-background-color: #eff6ff;
+        selection-color: #1e40af;
+    }
+    QHeaderView::section {
+        background-color: #f8fafc;
+        color: #475569;
+        font-weight: 600;
+        font-size: 11px;
+        border: none;
+        border-bottom: 1px solid #e2e8f0;
+        padding: 6px 8px;
+    }
+   </string>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="spacing">
+    <number>12</number>
+   </property>
+   <property name="leftMargin">
+    <number>16</number>
+   </property>
+   <property name="topMargin">
+    <number>16</number>
+   </property>
+   <property name="rightMargin">
+    <number>16</number>
+   </property>
+   <property name="bottomMargin">
+    <number>16</number>
+   </property>
+   <item>
+    <widget class="QFrame" name="headerFrame">
+     <property name="styleSheet">
+      <string notr="true">
+       QFrame#headerFrame {
+           background-color: #ffffff;
+           border: 1px solid #e2e8f0;
+           border-radius: 8px;
+           padding: 8px;
+       }
+      </string>
+     </property>
+     <layout class="QHBoxLayout" name="headerLayout">
+      <item>
+       <layout class="QVBoxLayout" name="titleLayout">
+        <property name="spacing">
+         <number>2</number>
+        </property>
+        <item>
+         <widget class="QLabel" name="labelTitle">
+          <property name="text">
+           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:16pt; font-weight:700; color:#0f172a;&quot;&gt;💎 PoUS Glyphs &amp;amp; Artifacts&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="labelSubtitle">
+          <property name="text">
+           <string>Cryptographic digital relics secured by Proof of Useful Security consensus</string>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">color: #64748b; font-size: 12px;</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <spacer name="headerSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnRefresh">
+        <property name="text">
+         <string>Refresh</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnExplorerAll">
+        <property name="text">
+         <string>Quavence Explorer</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="chipsLayout">
+     <property name="spacing">
+      <number>10</number>
+     </property>
+     <item>
+      <widget class="QFrame" name="chipTotal">
+       <property name="styleSheet">
+        <string notr="true">
+         QFrame { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; }
+        </string>
+       </property>
+       <layout class="QHBoxLayout" name="chipTotalLayout">
+        <property name="margin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QLabel" name="labelTotalCount">
+          <property name="text">
+           <string>&lt;b&gt;Owned Glyphs:&lt;/b&gt; 0</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QFrame" name="chipProtection">
+       <property name="styleSheet">
+        <string notr="true">
+         QFrame { background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 6px 12px; }
+        </string>
+       </property>
+       <layout class="QHBoxLayout" name="chipProtectionLayout">
+        <property name="margin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QLabel" name="labelProtection">
+          <property name="text">
+           <string>&lt;span style=&quot;color:#15803d;&quot;&gt;&lt;b&gt;Carrier Protection:&lt;/b&gt; 🔒 Active (Auto-Locked &amp;amp; Staking-Immune)&lt;/span&gt;</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QFrame" name="chipConsensus">
+       <property name="styleSheet">
+        <string notr="true">
+         QFrame { background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 6px 12px; }
+        </string>
+       </property>
+       <layout class="QHBoxLayout" name="chipConsensusLayout">
+        <property name="margin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QLabel" name="labelConsensus">
+          <property name="text">
+           <string>&lt;span style=&quot;color:#1d4ed8;&quot;&gt;&lt;b&gt;Carrier Value:&lt;/b&gt; 10,000 satoshi / glyph&lt;/span&gt;</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <spacer name="chipsSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QStackedWidget" name="stackedWidget">
+     <widget class="QWidget" name="pageEmpty">
+      <layout class="QVBoxLayout" name="emptyLayout">
+       <item>
+        <spacer name="emptyTopSpacer">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLabel" name="labelEmptyIcon">
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+         <property name="text">
+          <string>&lt;span style=&quot;font-size: 48pt;&quot;&gt;💎&lt;/span&gt;</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="labelEmptyTitle">
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+         <property name="text">
+          <string>&lt;h3 style=&quot;color: #1e293b; margin: 4px 0;&quot;&gt;No PoUS Glyphs Found in This Wallet&lt;/h3&gt;</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="labelEmptyDesc">
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>&lt;p style=&quot;color: #64748b; max-width: 520px; font-size: 13px;&quot;&gt;PoUS Glyphs are digital relics awarded for AI Hub consensus attestations and DAO drops.&lt;br/&gt;When your wallet receives a glyph carrier UTXO (10,000 sat), it is automatically locked, protected from staking, and displayed here.&lt;/p&gt;</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="emptyButtonLayout">
+         <item>
+          <spacer name="emptyBtnSpacerL">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnEmptyExplorer">
+           <property name="text">
+            <string>Explore Glyphs in Quavence Explorer</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="emptyBtnSpacerR">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <spacer name="emptyBottomSpacer">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="pageTable">
+      <layout class="QVBoxLayout" name="tableLayout">
+       <property name="margin">
+        <number>0</number>
+       </property>
+       <property name="spacing">
+        <number>10</number>
+       </property>
+       <item>
+        <widget class="QTableWidget" name="tableGlyphs">
+         <property name="editTriggers">
+          <set>QAbstractItemView::NoEditTriggers</set>
+         </property>
+         <property name="alternatingRowColors">
+          <bool>true</bool>
+         </property>
+         <property name="selectionMode">
+          <enum>QAbstractItemView::SingleSelection</enum>
+         </property>
+         <property name="selectionBehavior">
+          <enum>QAbstractItemView::SelectRows</enum>
+         </property>
+         <property name="sortingEnabled">
+          <bool>true</bool>
+         </property>
+         <attribute name="horizontalHeaderStretchLastSection">
+          <bool>true</bool>
+         </attribute>
+         <column>
+          <property name="text">
+           <string>Edition</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Glyph Hash</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Carrier Address</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Carrier UTXO</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Protection</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Confirmations</string>
+          </property>
+         </column>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="actionsLayout">
+         <property name="spacing">
+          <number>8</number>
+         </property>
+         <item>
+          <widget class="QPushButton" name="btnTransfer">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="text">
+            <string>Safe Transfer Selected Glyph...</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnExplorerRow">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="text">
+            <string>View in Explorer</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnCopyHash">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="text">
+            <string>Copy Hash</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnCopyAddress">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="text">
+            <string>Copy Address</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="actionsSpacer">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -123,6 +123,13 @@ void WalletFrame::gotoAIWorkerPage()
         i.value()->gotoAIWorkerPage();
 }
 
+void WalletFrame::gotoGlyphsPage()
+{
+    QMap<QString, WalletView*>::const_iterator i;
+    for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
+        i.value()->gotoGlyphsPage();
+}
+
 void WalletFrame::gotoHistoryPage()
 {
     QMap<QString, WalletView*>::const_iterator i;

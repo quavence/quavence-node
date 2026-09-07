@@ -309,6 +309,13 @@ void BitcoinGUI::createActions()
     aiWorkerAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_5));
     tabGroup->addAction(aiWorkerAction);
 
+    glyphsAction = new QAction(tr("&Glyphs"), this);
+    glyphsAction->setStatusTip(tr("Manage PoUS Glyphs, carrier protection, and safe transfers"));
+    glyphsAction->setToolTip(glyphsAction->statusTip());
+    glyphsAction->setCheckable(true);
+    glyphsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_6));
+    tabGroup->addAction(glyphsAction);
+
     refreshToolbarTabIcons();
     connect(tabGroup, SIGNAL(triggered(QAction*)), this, SLOT(updateToolbarTabIcon(QAction*)));
 
@@ -329,6 +336,8 @@ void BitcoinGUI::createActions()
     connect(historyAction, SIGNAL(triggered()), this, SLOT(gotoHistoryPage()));
     connect(aiWorkerAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(aiWorkerAction, SIGNAL(triggered()), this, SLOT(gotoAIWorkerPage()));
+    connect(glyphsAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    connect(glyphsAction, SIGNAL(triggered()), this, SLOT(gotoGlyphsPage()));
 #endif // ENABLE_WALLET
 
     quitAction = new QAction(platformStyle->TextColorIcon(":/icons/quit"), tr("E&xit"), this);
@@ -425,6 +434,7 @@ void BitcoinGUI::refreshToolbarTabIcons()
         {receiveCoinsAction, GUIUtil::BrandToolbarIcon::Receive},
         {historyAction, GUIUtil::BrandToolbarIcon::Transactions},
         {aiWorkerAction, GUIUtil::BrandToolbarIcon::AIWorker},
+        {glyphsAction, GUIUtil::BrandToolbarIcon::Glyphs},
     };
     for (const TabIcon &tab : tabs) {
         if (!tab.action)
@@ -501,6 +511,7 @@ void BitcoinGUI::createToolBars()
         toolbar->addAction(receiveCoinsAction);
         toolbar->addAction(historyAction);
         toolbar->addAction(aiWorkerAction);
+        toolbar->addAction(glyphsAction);
         overviewAction->setChecked(true);
     }
 }
@@ -738,6 +749,12 @@ void BitcoinGUI::gotoAIWorkerPage()
 {
     aiWorkerAction->setChecked(true);
     if (walletFrame) walletFrame->gotoAIWorkerPage();
+}
+
+void BitcoinGUI::gotoGlyphsPage()
+{
+    glyphsAction->setChecked(true);
+    if (walletFrame) walletFrame->gotoGlyphsPage();
 }
 
 void BitcoinGUI::gotoHistoryPage()

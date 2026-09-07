@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>GlyphTransferDialog</class>
+ <widget class="QDialog" name="GlyphTransferDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>540</width>
+    <height>460</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Safe Transfer PoUS Glyph</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">
+    QDialog {
+        background-color: #ffffff;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    QGroupBox {
+        font-size: 12px;
+        font-weight: 600;
+        color: #1e40af;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        margin-top: 12px;
+        padding-top: 12px;
+        background-color: #f8fafc;
+    }
+    QGroupBox::title {
+        subcontrol-origin: margin;
+        subcontrol-position: top left;
+        left: 12px;
+        padding: 0 4px;
+        background-color: #f8fafc;
+    }
+    QLineEdit {
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 7px 10px;
+        background-color: #ffffff;
+        color: #0f172a;
+        font-size: 12px;
+    }
+    QLineEdit:focus {
+        border-color: #2563eb;
+    }
+    QPushButton {
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 7px 14px;
+        background-color: #ffffff;
+        color: #1e293b;
+        font-weight: 500;
+        font-size: 12px;
+    }
+    QPushButton:hover {
+        background-color: #f1f5f9;
+        border-color: #94a3b8;
+    }
+    QPushButton#btnTransfer {
+        background-color: #2563eb;
+        color: #ffffff;
+        border: 1px solid #1d4ed8;
+        font-weight: 600;
+    }
+    QPushButton#btnTransfer:hover {
+        background-color: #1d4ed8;
+    }
+    QPushButton#btnTransfer:disabled {
+        background-color: #93c5fd;
+        border-color: #bfdbfe;
+    }
+   </string>
+  </property>
+  <layout class="QVBoxLayout" name="dialogLayout">
+   <property name="spacing">
+    <number>12</number>
+   </property>
+   <property name="margin">
+    <number>16</number>
+   </property>
+
+   <!-- Header -->
+   <item>
+    <widget class="QLabel" name="labelHeader">
+     <property name="text">
+      <string>&lt;html&gt;&lt;body&gt;&lt;h3 style=&quot;margin:0; color:#0f172a;&quot;&gt;💎 Safe Transfer PoUS Glyph&lt;/h3&gt;&lt;span style=&quot;color:#64748b; font-size:12px;&quot;&gt;Atomic on-chain relocation of Glyph Carrier UTXO with OP_RETURN payload&lt;/span&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     </property>
+    </widget>
+   </item>
+
+   <!-- Selected Glyph Details Box -->
+   <item>
+    <widget class="QGroupBox" name="groupDetails">
+     <property name="title">
+      <string>Glyph Information</string>
+     </property>
+     <layout class="QFormLayout" name="formLayout">
+      <property name="horizontalSpacing">
+       <number>12</number>
+      </property>
+      <property name="verticalSpacing">
+       <number>8</number>
+      </property>
+      <item row="0" column="0">
+       <widget class="QLabel" name="lblEditionTitle">
+        <property name="text">
+         <string>&lt;b&gt;Edition:&lt;/b&gt;</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QLabel" name="lblEditionVal">
+        <property name="text">
+         <string>#0</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="lblHashTitle">
+        <property name="text">
+         <string>&lt;b&gt;Glyph Hash:&lt;/b&gt;</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QLabel" name="lblHashVal">
+        <property name="text">
+         <string>0x00...</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="lblCarrierTitle">
+        <property name="text">
+         <string>&lt;b&gt;Carrier UTXO:&lt;/b&gt;</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QLabel" name="lblCarrierVal">
+        <property name="text">
+         <string>txid:vout (10,000 sat)</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   <!-- Recipient Address Box -->
+   <item>
+    <widget class="QGroupBox" name="groupRecipient">
+     <property name="title">
+      <string>Recipient Destination</string>
+     </property>
+     <layout class="QVBoxLayout" name="recipientLayout">
+      <property name="spacing">
+       <number>8</number>
+      </property>
+      <item>
+       <layout class="QHBoxLayout" name="inputLayout">
+        <property name="spacing">
+         <number>6</number>
+        </property>
+        <item>
+         <widget class="QLineEdit" name="lineEditRecipient">
+          <property name="placeholderText">
+           <string>Enter recipient Quavence address (Q...)</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnPaste">
+          <property name="text">
+           <string>Paste</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnAddressBook">
+          <property name="text">
+           <string>Address Book</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   <!-- Security Info Note -->
+   <item>
+    <widget class="QFrame" name="frameInfo">
+     <property name="styleSheet">
+      <string notr="true">
+       QFrame {
+           background-color: #f0fdf4;
+           border: 1px solid #bbf7d0;
+           border-radius: 6px;
+           padding: 8px 12px;
+       }
+      </string>
+     </property>
+     <layout class="QVBoxLayout" name="infoLayout">
+      <property name="margin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="lblInfoText">
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+        <property name="text">
+         <string>&lt;span style=&quot;color:#166534; font-size:11px;&quot;&gt;&lt;b&gt;PoUS Security Guarantee:&lt;/b&gt; This wizard safely unlocks the 10,000 sat carrier UTXO for this specific transaction, appends the genuine 40-byte OP_RETURN cryptographic transfer payload (QVNC v1 TRANSFER), and funds the standard network transaction fee (~0.0001 QVNC) from other wallet coins.&lt;/span&gt;</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   <item>
+    <spacer name="bottomSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+    </spacer>
+   </item>
+
+   <!-- Dialog Action Buttons -->
+   <item>
+    <layout class="QHBoxLayout" name="buttonsLayout">
+     <property name="spacing">
+      <number>8</number>
+     </property>
+     <item>
+      <spacer name="buttonsSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnCancel">
+       <property name="text">
+        <string>Cancel</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnTransfer">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>Transfer Glyph</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

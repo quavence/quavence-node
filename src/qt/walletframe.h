@@ -63,6 +63,8 @@ public Q_SLOTS:
     void gotoHistoryPage();
     /** Switch to AI worker / DePIN page */
     void gotoAIWorkerPage();
+    /** Switch to Glyphs page */
+    void gotoGlyphsPage();
     /** Switch to receive coins page */
     void gotoReceiveCoinsPage();
     /** Switch to send coins page */

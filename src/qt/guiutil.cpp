@@ -636,6 +636,62 @@ static QPainterPath toolbarAIWorkerShape()
     return path;
 }
 
+static QPainterPath toolbarGlyphsShape()
+{
+    QPainterPath path;
+    // Brilliant cut faceted diamond / PoUS Glyph
+    // Table facet (top center)
+    QPainterPath table;
+    table.moveTo(8.8, 4.8);
+    table.lineTo(15.2, 4.8);
+    table.lineTo(13.6, 8.8);
+    table.lineTo(10.4, 8.8);
+    table.closeSubpath();
+    path.addPath(table);
+
+    // Top left facet
+    QPainterPath topL;
+    topL.moveTo(7.8, 5.0);
+    topL.lineTo(9.4, 8.8);
+    topL.lineTo(4.6, 9.2);
+    topL.closeSubpath();
+    path.addPath(topL);
+
+    // Top right facet
+    QPainterPath topR;
+    topR.moveTo(16.2, 5.0);
+    topR.lineTo(19.4, 9.2);
+    topR.lineTo(14.6, 8.8);
+    topR.closeSubpath();
+    path.addPath(topR);
+
+    // Bottom center facet (kite/shield)
+    QPainterPath botCenter;
+    botCenter.moveTo(10.4, 10.2);
+    botCenter.lineTo(13.6, 10.2);
+    botCenter.lineTo(12.0, 18.8);
+    botCenter.closeSubpath();
+    path.addPath(botCenter);
+
+    // Bottom left facet
+    QPainterPath botL;
+    botL.moveTo(4.6, 10.2);
+    botL.lineTo(9.4, 10.2);
+    botL.lineTo(11.0, 18.0);
+    botL.closeSubpath();
+    path.addPath(botL);
+
+    // Bottom right facet
+    QPainterPath botR;
+    botR.moveTo(19.4, 10.2);
+    botR.lineTo(12.8, 18.0);
+    botR.lineTo(14.6, 10.2);
+    botR.closeSubpath();
+    path.addPath(botR);
+
+    return path;
+}
+
 static QPainterPath toolbarOverviewShape()
 {
     QPainterPath path;
@@ -768,6 +824,9 @@ QIcon brandToolbarIcon(BrandToolbarIcon icon, const QColor &color)
         break;
     case BrandToolbarIcon::AIWorker:
         painter.drawPath(toolbarAIWorkerShape());
+        break;
+    case BrandToolbarIcon::Glyphs:
+        painter.drawPath(toolbarGlyphsShape());
         break;
     }
 

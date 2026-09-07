@@ -145,7 +145,8 @@ namespace GUIUtil
         Send,
         Receive,
         Transactions,
-        AIWorker
+        AIWorker,
+        Glyphs
     };
 
     /** Filled miniapp-style toolbar icon (24×24 art in a 40×40 pixmap). */

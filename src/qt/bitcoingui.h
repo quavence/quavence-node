@@ -103,6 +103,7 @@ private:
     QAction *overviewAction;
     QAction *historyAction;
     QAction *aiWorkerAction;
+    QAction *glyphsAction;
     QAction *quitAction;
     QAction *sendCoinsAction;
     QAction *sendCoinsMenuAction;
@@ -210,6 +211,8 @@ private Q_SLOTS:
     void gotoHistoryPage();
     /** Switch to AI worker / DePIN page */
     void gotoAIWorkerPage();
+    /** Switch to PoUS Glyphs page */
+    void gotoGlyphsPage();
     /** Switch to receive coins page */
     void gotoReceiveCoinsPage();
     /** Switch to send coins page */

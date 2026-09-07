@@ -12,6 +12,7 @@
 #include "optionsmodel.h"
 #include "overviewpage.h"
 #include "aiworkerpage.h"
+#include "glyphspage.h"
 #include "platformstyle.h"
 #include "receivecoinsdialog.h"
 #include "sendcoinsdialog.h"
@@ -40,6 +41,7 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, const Config *cfg, Q
     // Create tabs
     overviewPage = new OverviewPage(platformStyle);
     aiWorkerPage = new AIWorkerPage(platformStyle, this);
+    glyphsPage = new GlyphsPage(platformStyle, this);
 
     transactionsPage = new QWidget(this);
     QVBoxLayout *vbox = new QVBoxLayout();
@@ -67,6 +69,7 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, const Config *cfg, Q
     addWidget(receiveCoinsPage);
     addWidget(sendCoinsPage);
     addWidget(aiWorkerPage);
+    addWidget(glyphsPage);
 
     // Clicking on a transaction on the overview pre-selects the transaction on the transaction history page
     connect(overviewPage, SIGNAL(transactionClicked(QModelIndex)), transactionView, SLOT(focusTransaction(QModelIndex)));
@@ -115,6 +118,7 @@ void WalletView::setClientModel(ClientModel *clientModel)
 
     overviewPage->setClientModel(clientModel);
     if (aiWorkerPage) aiWorkerPage->setClientModel(clientModel);
+    if (glyphsPage) glyphsPage->setClientModel(clientModel);
     sendCoinsPage->setClientModel(clientModel);
 }
 
@@ -126,6 +130,7 @@ void WalletView::setWalletModel(WalletModel *walletModel)
     transactionView->setModel(walletModel);
     overviewPage->setWalletModel(walletModel);
     if (aiWorkerPage) aiWorkerPage->setWalletModel(walletModel);
+    if (glyphsPage) glyphsPage->setWalletModel(walletModel);
     receiveCoinsPage->setModel(walletModel);
     sendCoinsPage->setModel(walletModel);
     usedReceivingAddressesPage->setModel(walletModel->getAddressTableModel());
@@ -184,6 +189,11 @@ void WalletView::gotoOverviewPage()
 void WalletView::gotoAIWorkerPage()
 {
     setCurrentWidget(aiWorkerPage);
+}
+
+void WalletView::gotoGlyphsPage()
+{
+    setCurrentWidget(glyphsPage);
 }
 
 void WalletView::gotoHistoryPage()
