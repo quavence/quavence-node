@@ -15,11 +15,13 @@
 #include "wallet/wallet.h"
 
 #include <algorithm>
+#include <set>
 #include <QApplication>
 #include <QClipboard>
 #include <QDesktopServices>
 #include <QHeaderView>
 #include <QMessageBox>
+#include <QShowEvent>
 #include <QTableWidgetItem>
 #include <QUrl>
 
@@ -42,6 +44,7 @@ GlyphsPage::GlyphsPage(const PlatformStyle *_platformStyle, QWidget *parent) :
             << tr("Protection")
             << tr("Confirmations");
     ui->tableGlyphs->setHorizontalHeaderLabels(headers);
+
     ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
@@ -71,6 +74,10 @@ GlyphsPage::~GlyphsPage()
 void GlyphsPage::setClientModel(ClientModel *_clientModel)
 {
     this->clientModel = _clientModel;
+    if (clientModel) {
+        connect(clientModel, SIGNAL(numBlocksChanged(int,QDateTime,double,bool)),
+                this, SLOT(updateGlyphs()));
+    }
 }
 
 void GlyphsPage::setWalletModel(WalletModel *_walletModel)
@@ -79,7 +86,15 @@ void GlyphsPage::setWalletModel(WalletModel *_walletModel)
     if (walletModel) {
         connect(walletModel, SIGNAL(balanceChanged(CAmount,CAmount,CAmount,CAmount,CAmount,CAmount,CAmount,CAmount,unsigned int)),
                 this, SLOT(updateGlyphs()));
+        connect(walletModel, SIGNAL(numBlocksChanged(int,QDateTime,double,bool)),
+                this, SLOT(updateGlyphs()));
     }
+    updateGlyphs();
+}
+
+void GlyphsPage::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
     updateGlyphs();
 }
 
@@ -89,12 +104,51 @@ void GlyphsPage::updateGlyphs()
 
     if (!walletModel || !walletModel->getWallet()) {
         ui->stackedWidget->setCurrentIndex(0);
-        ui->labelTotalCount->setText(tr("<b>Owned Glyphs:</b> 0"));
+        ui->labelKpiCount->setText(QString("<span style='font-size:18px; font-weight:700; color:#0f172a;'>0</span> <span style='font-size:12px; font-weight:500; color:#64748b;'>%1</span>").arg(tr("Relics")));
         return;
     }
 
+    std::set<std::pair<uint256, unsigned int>> seenCoins;
+
+    // 1. Primary Source: listCoins (same method that powers CoinControl, includes available & locked coins)
+    std::map<QString, std::vector<COutput>> mapCoins;
+    walletModel->listCoins(mapCoins);
+
+    for (const auto& pair : mapCoins) {
+        const QString& groupAddress = pair.first;
+        for (const COutput& out : pair.second) {
+            if (!out.tx) continue;
+
+            GlyphCarrierRecord glyphRec;
+            if (GetTxGlyphCarrier(*out.tx, out.i, glyphRec)) {
+                uint256 txhash = out.tx->GetHash();
+                seenCoins.insert({txhash, (unsigned int)out.i});
+
+                GlyphEntry item;
+                item.edition = glyphRec.edition;
+                item.glyphHash = glyphRec.glyphHash;
+                item.txid = txhash;
+                item.vout = out.i;
+                item.confirmations = out.nDepth;
+                item.isLocked = walletModel->isLockedCoin(txhash, out.i);
+
+                CTxDestination dest;
+                if (ExtractDestination(out.tx->vout[out.i].scriptPubKey, dest)) {
+                    item.carrierAddress = QString::fromStdString(EncodeDestination(dest));
+                } else if (!groupAddress.isEmpty()) {
+                    item.carrierAddress = groupAddress;
+                } else {
+                    item.carrierAddress = tr("(unknown)");
+                }
+
+                currentGlyphs.push_back(item);
+            }
+        }
+    }
+
+    // 2. Comprehensive Fallback: mapWallet scan
     CWallet *wallet = walletModel->getWallet();
-    {
+    if (wallet) {
         LOCK2(cs_main, wallet->cs_wallet);
 
         for (const auto& entry : wallet->mapWallet) {
@@ -103,20 +157,27 @@ void GlyphsPage::updateGlyphs()
             if (nDepth < 0) continue; // In conflict/dead branch
 
             for (unsigned int i = 0; i < wtx.vout.size(); ++i) {
-                if (wtx.vout[i].nValue == GLYPH_CARRIER_DUST && wallet->IsMine(wtx.vout[i])) {
-                    if (wallet->IsSpent(entry.first, i)) {
-                        continue; // Already spent
+                if (wtx.vout[i].nValue == GLYPH_CARRIER_DUST && (wallet->IsMine(wtx.vout[i]) & (ISMINE_SPENDABLE | ISMINE_WATCH_ONLY))) {
+                    uint256 txhash = entry.first;
+                    if (seenCoins.count({txhash, i})) {
+                        continue;
+                    }
+
+                    if (wallet->IsSpent(txhash, i)) {
+                        continue; // Spent on-chain
                     }
 
                     GlyphCarrierRecord glyphRec;
                     if (GetTxGlyphCarrier(wtx, i, glyphRec)) {
+                        seenCoins.insert({txhash, i});
+
                         GlyphEntry item;
                         item.edition = glyphRec.edition;
                         item.glyphHash = glyphRec.glyphHash;
-                        item.txid = entry.first;
+                        item.txid = txhash;
                         item.vout = i;
                         item.confirmations = nDepth;
-                        item.isLocked = wallet->IsLockedCoin(entry.first, i);
+                        item.isLocked = wallet->IsLockedCoin(txhash, i);
 
                         CTxDestination dest;
                         if (ExtractDestination(wtx.vout[i].scriptPubKey, dest)) {
@@ -132,7 +193,7 @@ void GlyphsPage::updateGlyphs()
         }
     }
 
-    // Sort by edition
+    // Sort by edition ascending
     std::sort(currentGlyphs.begin(), currentGlyphs.end(), [](const GlyphEntry& a, const GlyphEntry& b) {
         return a.edition < b.edition;
     });
@@ -180,9 +241,12 @@ void GlyphsPage::updateGlyphs()
         ui->tableGlyphs->setItem(row, 5, itemConf);
     }
 
-    // Update stats & stack view
+    // Update KPI metrics & stack view
     size_t count = currentGlyphs.size();
-    ui->labelTotalCount->setText(tr("<b>Owned Glyphs:</b> %1").arg(count));
+    ui->labelKpiCount->setText(QString("<span style='font-size:18px; font-weight:700; color:#0f172a;'>%1</span> <span style='font-size:12px; font-weight:500; color:#64748b;'>%2</span>")
+        .arg(count)
+        .arg(count == 1 ? tr("Relic") : tr("Relics")));
+
     if (count == 0) {
         ui->stackedWidget->setCurrentIndex(0);
     } else {

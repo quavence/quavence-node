@@ -194,6 +194,9 @@ void WalletView::gotoAIWorkerPage()
 void WalletView::gotoGlyphsPage()
 {
     setCurrentWidget(glyphsPage);
+    if (glyphsPage) {
+        glyphsPage->updateGlyphs();
+    }
 }
 
 void WalletView::gotoHistoryPage()

@@ -90,37 +90,67 @@
     <number>16</number>
    </property>
    <item>
+    <!-- Header: slim, transparent frame matching AI Worker page -->
     <widget class="QFrame" name="headerFrame">
      <property name="styleSheet">
       <string notr="true">
        QFrame#headerFrame {
-           background-color: #ffffff;
-           border: 1px solid #e2e8f0;
-           border-radius: 8px;
-           padding: 8px;
+           background-color: transparent;
+           border: none;
+           padding: 0px 0px 4px 0px;
        }
       </string>
      </property>
+     <property name="frameShape">
+      <enum>QFrame::NoFrame</enum>
+     </property>
      <layout class="QHBoxLayout" name="headerLayout">
+      <property name="leftMargin">
+       <number>6</number>
+      </property>
+      <property name="topMargin">
+       <number>6</number>
+      </property>
+      <property name="rightMargin">
+       <number>6</number>
+      </property>
+      <property name="bottomMargin">
+       <number>6</number>
+      </property>
       <item>
        <layout class="QVBoxLayout" name="titleLayout">
         <property name="spacing">
-         <number>2</number>
+         <number>3</number>
         </property>
         <item>
          <widget class="QLabel" name="labelTitle">
+          <property name="font">
+           <font>
+            <pointsize>13</pointsize>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">color: #0f172a;</string>
+          </property>
           <property name="text">
-           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:16pt; font-weight:700; color:#0f172a;&quot;&gt;💎 PoUS Glyphs &amp;amp; Artifacts&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           <string>PoUS Glyphs &amp; Artifacts</string>
           </property>
          </widget>
         </item>
         <item>
          <widget class="QLabel" name="labelSubtitle">
-          <property name="text">
-           <string>Cryptographic digital relics secured by Proof of Useful Security consensus</string>
+          <property name="font">
+           <font>
+            <pointsize>9</pointsize>
+           </font>
           </property>
           <property name="styleSheet">
-           <string notr="true">color: #64748b; font-size: 12px;</string>
+           <string notr="true">color: #64748b;</string>
+          </property>
+          <property name="text">
+           <string>Cryptographic digital relics secured by Proof of Useful Security consensus.</string>
           </property>
          </widget>
         </item>
@@ -151,25 +181,44 @@
     </widget>
    </item>
    <item>
-    <layout class="QHBoxLayout" name="chipsLayout">
+    <!-- Modern unified KPI metrics row -->
+    <layout class="QHBoxLayout" name="kpiLayout">
      <property name="spacing">
-      <number>10</number>
+      <number>12</number>
      </property>
      <item>
-      <widget class="QFrame" name="chipTotal">
+      <widget class="QFrame" name="kpiOwned">
        <property name="styleSheet">
         <string notr="true">
-         QFrame { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; }
+         QFrame#kpiOwned {
+             background-color: #ffffff;
+             border: 1px solid #e2e8f0;
+             border-radius: 8px;
+             padding: 10px 16px;
+         }
         </string>
        </property>
-       <layout class="QHBoxLayout" name="chipTotalLayout">
+       <layout class="QVBoxLayout" name="kpiOwnedLayout">
         <property name="margin">
          <number>0</number>
         </property>
+        <property name="spacing">
+         <number>3</number>
+        </property>
         <item>
-         <widget class="QLabel" name="labelTotalCount">
+         <widget class="QLabel" name="labelKpiOwnedTitle">
+          <property name="styleSheet">
+           <string notr="true">font-size: 10px; font-weight: 600; color: #64748b; letter-spacing: 0.5px;</string>
+          </property>
           <property name="text">
-           <string>&lt;b&gt;Owned Glyphs:&lt;/b&gt; 0</string>
+           <string>TOTAL OWNED GLYPHS</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="labelKpiCount">
+          <property name="text">
+           <string>&lt;span style=&quot;font-size:18px; font-weight:700; color:#0f172a;&quot;&gt;0&lt;/span&gt; &lt;span style=&quot;font-size:12px; font-weight:500; color:#64748b;&quot;&gt;Relics&lt;/span&gt;</string>
           </property>
          </widget>
         </item>
@@ -177,20 +226,38 @@
       </widget>
      </item>
      <item>
-      <widget class="QFrame" name="chipProtection">
+      <widget class="QFrame" name="kpiProtection">
        <property name="styleSheet">
         <string notr="true">
-         QFrame { background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 6px 12px; }
+         QFrame#kpiProtection {
+             background-color: #ffffff;
+             border: 1px solid #e2e8f0;
+             border-radius: 8px;
+             padding: 10px 16px;
+         }
         </string>
        </property>
-       <layout class="QHBoxLayout" name="chipProtectionLayout">
+       <layout class="QVBoxLayout" name="kpiProtectionLayout">
         <property name="margin">
          <number>0</number>
         </property>
+        <property name="spacing">
+         <number>3</number>
+        </property>
         <item>
-         <widget class="QLabel" name="labelProtection">
+         <widget class="QLabel" name="labelKpiProtectionTitle">
+          <property name="styleSheet">
+           <string notr="true">font-size: 10px; font-weight: 600; color: #64748b; letter-spacing: 0.5px;</string>
+          </property>
           <property name="text">
-           <string>&lt;span style=&quot;color:#15803d;&quot;&gt;&lt;b&gt;Carrier Protection:&lt;/b&gt; 🔒 Active (Auto-Locked &amp;amp; Staking-Immune)&lt;/span&gt;</string>
+           <string>CARRIER PROTECTION</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="labelKpiProtection">
+          <property name="text">
+           <string>&lt;span style=&quot;font-size:14px; font-weight:600; color:#0f172a;&quot;&gt;🔒 Auto-Locked&lt;/span&gt; &lt;span style=&quot;font-size:11px; font-weight:500; color:#64748b;&quot;&gt;(Staking-Immune)&lt;/span&gt;</string>
           </property>
          </widget>
         </item>
@@ -198,32 +265,43 @@
       </widget>
      </item>
      <item>
-      <widget class="QFrame" name="chipConsensus">
+      <widget class="QFrame" name="kpiValue">
        <property name="styleSheet">
         <string notr="true">
-         QFrame { background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 6px 12px; }
+         QFrame#kpiValue {
+             background-color: #ffffff;
+             border: 1px solid #e2e8f0;
+             border-radius: 8px;
+             padding: 10px 16px;
+         }
         </string>
        </property>
-       <layout class="QHBoxLayout" name="chipConsensusLayout">
+       <layout class="QVBoxLayout" name="kpiValueLayout">
         <property name="margin">
          <number>0</number>
         </property>
+        <property name="spacing">
+         <number>3</number>
+        </property>
         <item>
-         <widget class="QLabel" name="labelConsensus">
+         <widget class="QLabel" name="labelKpiValueTitle">
+          <property name="styleSheet">
+           <string notr="true">font-size: 10px; font-weight: 600; color: #64748b; letter-spacing: 0.5px;</string>
+          </property>
           <property name="text">
-           <string>&lt;span style=&quot;color:#1d4ed8;&quot;&gt;&lt;b&gt;Carrier Value:&lt;/b&gt; 10,000 satoshi / glyph&lt;/span&gt;</string>
+           <string>CARRIER UTXO VALUE</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="labelKpiValue">
+          <property name="text">
+           <string>&lt;span style=&quot;font-size:14px; font-weight:600; color:#0f172a;&quot;&gt;0.00010000 QVNC&lt;/span&gt; &lt;span style=&quot;font-size:11px; font-weight:500; color:#64748b;&quot;&gt;(10,000 sat)&lt;/span&gt;</string>
           </property>
          </widget>
         </item>
        </layout>
       </widget>
-     </item>
-     <item>
-      <spacer name="chipsSpacer">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
-       </property>
-      </spacer>
      </item>
     </layout>
    </item>
