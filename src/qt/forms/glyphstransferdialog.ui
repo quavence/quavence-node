@@ -219,7 +219,7 @@
          <bool>true</bool>
         </property>
         <property name="text">
-         <string>&lt;span style=&quot;color:#166534; font-size:11px;&quot;&gt;&lt;b&gt;PoUS Security Guarantee:&lt;/b&gt; This wizard safely unlocks the 10,000 sat carrier UTXO for this specific transaction, appends the genuine 40-byte OP_RETURN cryptographic transfer payload (QVNC v1 TRANSFER), and funds the standard network transaction fee (~0.0001 QVNC) from other wallet coins.&lt;/span&gt;</string>
+         <string>&lt;span style=&quot;color:#166534; font-size:11px;&quot;&gt;&lt;b&gt;PoUS Protocol Guarantee:&lt;/b&gt; This wizard safely unlocks the 10,000 sat carrier UTXO for this specific transaction, appends the genuine 40-byte OP_RETURN cryptographic transfer payload (QVNC v1 TRANSFER), and funds the standard network transaction fee (~0.0001 QVNC) from other wallet coins.&lt;/span&gt;</string>
         </property>
        </widget>
       </item>
