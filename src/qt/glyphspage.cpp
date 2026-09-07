@@ -20,6 +20,7 @@
 #include <QClipboard>
 #include <QDesktopServices>
 #include <QHeaderView>
+#include <QMenu>
 #include <QMessageBox>
 #include <QShowEvent>
 #include <QTableWidgetItem>
@@ -62,6 +63,9 @@ GlyphsPage::GlyphsPage(const PlatformStyle *_platformStyle, QWidget *parent) :
     connect(ui->btnCopyAddress, SIGNAL(clicked()), this, SLOT(onCopyAddressClicked()));
     connect(ui->tableGlyphs, SIGNAL(itemSelectionChanged()), this, SLOT(onTableSelectionChanged()));
     connect(ui->tableGlyphs, SIGNAL(cellDoubleClicked(int,int)), this, SLOT(onTableDoubleClicked(int,int)));
+
+    ui->tableGlyphs->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->tableGlyphs, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(onCustomContextMenu(QPoint)));
 
     updateGlyphs();
 }
@@ -303,7 +307,7 @@ void GlyphsPage::onExplorerClicked()
     int row = ui->tableGlyphs->currentRow();
     if (row >= 0 && row < (int)currentGlyphs.size()) {
         const GlyphEntry& g = currentGlyphs[row];
-        QString url = QString("https://explorer.quavence.com/glyphs/%1").arg(g.edition);
+        QString url = QString("https://explorer.quavence.com/glyph/%1").arg(g.edition);
         QDesktopServices::openUrl(QUrl(url));
     } else {
         QDesktopServices::openUrl(QUrl("https://explorer.quavence.com/glyphs"));
@@ -329,4 +333,56 @@ void GlyphsPage::onCopyAddressClicked()
     if (row >= 0 && row < (int)currentGlyphs.size()) {
         QApplication::clipboard()->setText(currentGlyphs[row].carrierAddress);
     }
+}
+
+void GlyphsPage::onCopyTxIdClicked()
+{
+    int row = ui->tableGlyphs->currentRow();
+    if (row >= 0 && row < (int)currentGlyphs.size()) {
+        QApplication::clipboard()->setText(QString::fromStdString(currentGlyphs[row].txid.ToString()));
+    }
+}
+
+void GlyphsPage::onCopyUtxoClicked()
+{
+    int row = ui->tableGlyphs->currentRow();
+    if (row >= 0 && row < (int)currentGlyphs.size()) {
+        const GlyphEntry& g = currentGlyphs[row];
+        QString utxoStr = QString("%1:%2").arg(QString::fromStdString(g.txid.ToString())).arg(g.vout);
+        QApplication::clipboard()->setText(utxoStr);
+    }
+}
+
+void GlyphsPage::onCopyEditionClicked()
+{
+    int row = ui->tableGlyphs->currentRow();
+    if (row >= 0 && row < (int)currentGlyphs.size()) {
+        QApplication::clipboard()->setText(QString::number(currentGlyphs[row].edition));
+    }
+}
+
+void GlyphsPage::onCustomContextMenu(const QPoint &pos)
+{
+    QModelIndex index = ui->tableGlyphs->indexAt(pos);
+    if (!index.isValid()) return;
+    int row = index.row();
+    if (row < 0 || row >= (int)currentGlyphs.size()) return;
+
+    ui->tableGlyphs->selectRow(row);
+    updateSelectionState();
+
+    const GlyphEntry &g = currentGlyphs[row];
+    QMenu contextMenu(this);
+
+    contextMenu.addAction(tr("Copy Carrier Address"), this, SLOT(onCopyAddressClicked()));
+    contextMenu.addAction(tr("Copy Carrier Transaction ID"), this, SLOT(onCopyTxIdClicked()));
+    contextMenu.addAction(tr("Copy Carrier UTXO (txid:vout)"), this, SLOT(onCopyUtxoClicked()));
+    contextMenu.addAction(tr("Copy Glyph Hash"), this, SLOT(onCopyHashClicked()));
+    contextMenu.addAction(tr("Copy Edition (#%1)").arg(g.edition), this, SLOT(onCopyEditionClicked()));
+
+    contextMenu.addSeparator();
+    contextMenu.addAction(tr("Safe Transfer Selected Glyph..."), this, SLOT(onTransferClicked()));
+    contextMenu.addAction(tr("View in Quavence Explorer"), this, SLOT(onExplorerClicked()));
+
+    contextMenu.exec(ui->tableGlyphs->viewport()->mapToGlobal(pos));
 }
