@@ -1,0 +1,22 @@
+Business Source License 1.1
+
+Licensor: Quavence DAO
+Licensed Work: Quavence PoUS & AI Worker Node Extensions
+Files:
+  - src/airegistry.cpp
+  - src/airegistry.h
+  - src/quavence_build.h
+  - src/qt/aiworkerpage.cpp
+  - src/qt/aiworkerpage.h
+  - src/qt/forms/aiworkerpage.ui
+  - src/qt/splitforstakingdialog.cpp
+  - src/qt/splitforstakingdialog.h
+  - src/qt/forms/splitforstakingdialog.ui
+
+Additional Use Grant:
+You may use these files and derivative works to compile, run, and operate a Quavence node,
+validator, staker, or compatible network participant. You may NOT use these files or derivative works
+to deploy or operate a competing commercial blockchain, decentralized staking network, or AI compute network.
+
+Change Date: 2030-01-01
+Change License: The MIT License (MIT)

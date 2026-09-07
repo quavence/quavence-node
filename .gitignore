@@ -183,3 +183,12 @@ src/qt/blackmore-qt.creator
 src/qt/blackmore-qt.creator.user
 src/qt/blackmore-qt.files
 src/qt/blackmore-qt.includes
+
+# Node runtime data — local only, never commit
+wsl-stake-node/
+wsl-chain-reset-*/
+deleted-wsl-stake-node-*/
+*-stake-node/
+wallet-passphrase.txt
+quavence.conf
+build-*/

@@ -1,86 +1,112 @@
-Blackcoin More
-=====================================
+# Quavence Core Node & PoUS All-in-One Wallet (QVNC)
 
-https://blackcoinmore.org
+[![Release](https://img.shields.io/badge/release-v15.0.0-blue.svg)](https://github.com/quavence/quavence-node/releases)
+[![Consensus](https://img.shields.io/badge/consensus-PoS3.0%20%2B%20PoUS-emerald.svg)](https://quavence.com)
+[![License](https://img.shields.io/badge/license-MIT%20%2F%20BSL--1.1-green.svg)](LICENSE-ADDITIONS)
 
-What is Blackcoin?
-----------------
+Quavence (QVNC) is a decentralized Layer-1 DePIN AI compute network powered by **Proof-of-Useful-Stake (PoUS)**. It combines high-throughput PoS 3.0 staking with autonomous on-chain AI worker attestation, knowledge-base RAG verification, and real-time staking yield boosts.
 
-Blackcoin is a decentralised digital currency with near-instant transaction speeds and negligible transaction fees built upon Proof of Stake 3.0 (PoSV3, BPoS) as
-introduced by the Blackcoin development team.
+---
 
-For more information about Blackcoin itself, see https://blackcoin.org.
+## Key Features
 
-What is Blackcoin More?
-----------------
+- **Integrated AI Worker:** Connects to local LLM engines (Ollama, LM Studio, OpenAI-compatible APIs) to process consensus audits, governance proposals, and verification tasks.
+- **Proof-of-Useful-Stake (PoUS):** Stakers operating active AI workers receive dynamic staking boosts (up to **+50%**) based on verified task execution within the on-chain attestation registry.
+- **On-Chain Fee Routing:** Native protocol-level fee allocation to decentralized security and compute reward pools.
+- **Coin Control & Staking Optimization:** Built-in UTXO splitting and coin control for optimized staking weight.
+- **Modular Targets:**
+  - `quavenced`: Headless P2P daemon for servers, validators, and mining pools.
+  - `quavence-cli`: Command-line RPC client.
+  - `quavence-qt`: All-in-One GUI desktop wallet with integrated AI Worker and PoUS dashboard.
 
-Blackcoin More is the name of open source software which enables the use of this currency. It takes Blackcoin to the next level by building upon
-Bitcoin Core 0.13.2 with some patches from newer Bitcoin Core versions to offer performance enhancements, wider compatibility with third party services and a more advanced base.
+---
 
-For more information, as well as an immediately useable, binary version of the Blackcoin More software, see https://blackcoinmore.org.
+## Building from Source (Linux / Ubuntu / Debian)
 
-License
--------
+### 1. Install Dependencies
 
-Blackcoin More is released under the terms of the MIT license. See [COPYING](COPYING) for more
-information or see https://opensource.org/licenses/MIT.
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential libtool autotools-dev automake pkg-config \
+    libssl-dev libevent-dev bsdmainutils python3 \
+    libboost-system-dev libboost-filesystem-dev libboost-chrono-dev \
+    libboost-program-options-dev libboost-test-dev libboost-thread-dev \
+    libqt5gui5 libqt5core5a libqt5dbus5 qttools5-dev qttools5-dev-tools \
+    libprotobuf-dev protobuf-compiler libqrencode-dev libdb5.3++-dev libdb5.3++
+```
 
-Development Process
--------------------
+### 2. Configure and Build
 
-The `master` branch is regularly built and tested, but is not guaranteed to be
-completely stable. [Tags](https://gitlab.com/blackcoin/blackcoin-more/tags) are created
-regularly to indicate new official, stable release versions of Blackcoin More.
+```bash
+# Generate build scripts
+./autogen.sh
 
-Change log can be found in [CHANGELOG.md](CHANGELOG.md).
+# Create build directory
+mkdir build-linux && cd build-linux
 
-The contribution workflow is described in [CONTRIBUTING.md](CONTRIBUTING.md).
+# Configure (builds daemon, cli, and Qt wallet)
+../configure --prefix=/ --disable-bench --disable-tests --enable-wallet --with-gui=qt5
 
-The best place to get started is to join Blackcoin Discord: https://discord.blackcoin.nl
+# Compile (adjust -j flag to your CPU core count)
+make -j4
+```
 
-Testing
--------
+To compile only the headless server daemon without GUI dependencies:
 
-Testing and code review might be the bottleneck for development. Please help out by testing
-other people's pull requests, and remember this is a security-critical project where any mistake might cost people
-lots of money.
+```bash
+../configure --prefix=/ --disable-bench --disable-tests --enable-wallet --without-gui
+make -j4
+```
 
-### Automated Testing
+Built binaries will be located in `src/`:
+- `src/quavenced`
+- `src/quavence-cli`
+- `src/qt/quavence-qt`
 
-Developers are strongly encouraged to write [unit tests](/doc/unit-tests.md) for new code, and to
-submit new unit tests for old code. Unit tests can be compiled and run
-(assuming they weren't disabled in configure) with: `make check`
+---
 
-There are also [regression and integration tests](/qa) of the RPC interface, written
-in Python, that are run automatically on the build server.
-These tests can be run (if the [test dependencies](/qa) are installed) with: `qa/pull-tester/rpc-tests.py`
+## Node Configuration
 
-The Travis CI system makes sure that every pull request is built for Windows, Linux, and OS X, and that unit/sanity tests are run automatically.
+Create the configuration file at `~/.quavence/quavence.conf`:
 
-### Manual Quality Assurance (QA) Testing
+```ini
+server=1
+listen=1
+daemon=1
+rpcuser=your_rpc_username
+rpcpassword=your_secure_rpc_password
+rpcallowip=127.0.0.1
+rpcport=15715
+port=15714
+staking=1
+```
 
-Changes should be tested by somebody other than the developer who wrote the
-code. This is especially important for large or high-risk changes. It is useful
-to add a test plan to the pull request description if testing the changes is
-not straightforward.
+### Running the Node
 
-Branches
--------
+```bash
+# Start daemon
+./src/quavenced -daemon
 
-### develop
-The develop branch is typically used by developers as the main branch for integrating new features and changes into the codebase.
-Pull requests should always be made to this branch (except for critical fixes), and might possibly break the code.
-The develop branch is considered an unstable branch, as it is constantly updated with new code, and it may contain bugs or unfinished features. It is not guaranteed to work properly on any system.
+# Check blockchain info via CLI
+./src/quavence-cli getblockchaininfo
 
-### master
-The master branch gets latest updates from the stable branch.
-However, it may contain experimental features and should be used with caution.
+# Check staking status
+./src/quavence-cli getstakinginfo
+```
 
-### 13.2
-The release branch for Blackcoin More 13.2.x. It is intended to contain stable and functional code that has been thoroughly tested and reviewed.
+---
 
-### 25.x
-The release branch for Blackcoin More 25.x. Contains functional but experimental code.
+## AI Worker Setup (GUI Wallet)
 
-### 26.x
-The release branch for Blackcoin More 26.x. Contains functional but highly experimental code.
+1. Launch the All-in-One Wallet: `./src/qt/quavence-qt`
+2. Navigate to the **AI Worker** tab.
+3. Enter your **Node Token** (generated in the Quavence Dashboard).
+4. Set the **Inference Endpoint** (e.g., `http://127.0.0.1:11434` for Ollama or `http://127.0.0.1:1234/v1` for LM Studio).
+5. Click **Start Worker** to connect, process verification tasks, and activate the PoUS Staking Boost.
+
+---
+
+## License
+
+- Quavence Blockchain Core, P2P Node, and Qt Wallet are released under the terms of the **MIT License**. See [COPYING](COPYING) for details.
+- The AI Worker subsystem, Compute Agents, and Attestation protocols are Copyright © Quavence DAO, licensed under the **Business Source License 1.1 (BSL-1.1)**. See [LICENSE-ADDITIONS](LICENSE-ADDITIONS) for details.
