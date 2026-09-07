@@ -483,7 +483,7 @@ void BitcoinApplication::initializeResult(int retval)
 
 #ifdef ENABLE_WALLET
         // Now that initialization/startup is done, process any command-line
-        // blackcoin: URIs or payment requests:
+        // quavence: URIs or payment requests:
         connect(paymentServer, SIGNAL(receivedPaymentRequest(SendCoinsRecipient)),
                          window, SLOT(handlePaymentRequest(SendCoinsRecipient)));
         connect(window, SIGNAL(receivedURI(QString)),
@@ -649,7 +649,7 @@ int main(int argc, char *argv[])
         exit(EXIT_SUCCESS);
 
     // Start up the payment server early, too, so impatient users that click on
-    // blackcoin: links repeatedly have their payment requests routed to this
+    // quavence: links repeatedly have their payment requests routed to this
     // process:
     app.createPaymentServer();
 #endif

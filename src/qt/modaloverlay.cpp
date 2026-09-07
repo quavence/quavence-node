@@ -104,8 +104,17 @@ void ModalOverlay::tipUpdate(int count, const QDateTime& blockDate, double nVeri
         // show progress increase per hour
         ui->progressIncreasePerH->setText(QString::number(progressPerHour*100, 'f', 2)+"%");
 
-        // show expected remaining time
-        ui->expectedTimeLeft->setText(GUIUtil::formateNiceTimeOffset(remainingMSecs/1000.0));
+        // show expected remaining time — guard against zero/near-zero progress rate
+        if (progressPerHour < 1e-6 || timeDelta == 0) {
+            ui->expectedTimeLeft->setText(tr("Calculating..."));
+        } else {
+            // remainingMSecs already computed above
+            if (remainingMSecs <= 0 || remainingMSecs > (qint64)365 * 24 * 3600 * 1000) {
+                ui->expectedTimeLeft->setText(tr("Calculating..."));
+            } else {
+                ui->expectedTimeLeft->setText(GUIUtil::formateNiceTimeOffset(remainingMSecs / 1000));
+            }
+        }
 
         static const int MAX_SAMPLES = 5000;
         if (blockProcessTime.count() > MAX_SAMPLES)
@@ -115,9 +124,16 @@ void ModalOverlay::tipUpdate(int count, const QDateTime& blockDate, double nVeri
     // show the last block date
     ui->newestBlockDate->setText(blockDate.toString());
 
-    // show the percentage done according to nVerificationProgress
-    ui->percentageProgress->setText(QString::number(nVerificationProgress*100, 'f', 2)+"%");
-    ui->progressBar->setValue(nVerificationProgress*100);
+    // Clamp progress to 99.9% while still syncing to prevent misleading 100%
+    double clampedProgress = nVerificationProgress;
+    bool isBehindHeaders = (bestHeaderHeight > count || !bestHeaderDate.isValid() ||
+                            bestHeaderDate < QDateTime::currentDateTime().addSecs(-600));
+    if (isBehindHeaders && clampedProgress >= 1.0) {
+        clampedProgress = 0.999;
+    }
+
+    ui->percentageProgress->setText(QString::number(clampedProgress*100, 'f', 2)+"%");
+    ui->progressBar->setValue(static_cast<int>(clampedProgress*100));
 
     if (!bestHeaderDate.isValid())
         // not syncing

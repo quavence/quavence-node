@@ -682,11 +682,11 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(WalletModelTransaction &tran
             }
             else if (!rcp.message.isEmpty())
             {
-                // Message from normal blackcoin:URI
-                // (blackcoin:123...?message=example)
+                // Message from normal quavence:URI
+                // (quavence:123...?message=example)
                 newTx->vOrderForm.push_back(make_pair("Message", rcp.message.toStdString()));
             }
-            else if (!rcp.message.isEmpty()) // Message from normal blackcoin:URI (blackcoin:123...?message=example)
+            else if (!rcp.message.isEmpty()) // Message from normal quavence:URI (quavence:123...?message=example)
                 newTx->vOrderForm.push_back(make_pair("Message", rcp.message.toStdString()));
         }
 

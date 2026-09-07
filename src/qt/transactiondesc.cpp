@@ -263,7 +263,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, TransactionReco
             strHTML += "<b>" + tr("Block height") + ":</b> " + QString::number(bi->second->nHeight) + "<br>";
     }
 
-    // Message from normal blackcoin:URI (blackcoin:123...?message=example)
+    // Message from normal quavence:URI (quavence:123...?message=example)
     for (const std::pair<std::string, std::string> &r : wtx.vOrderForm)
     {
         if (r.first == "Message")
