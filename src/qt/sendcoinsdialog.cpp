@@ -3,6 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "sendcoinsdialog.h"
+#include "airegistry.h"
 #include "ui_sendcoinsdialog.h"
 
 #include "addresstablemodel.h"
@@ -245,6 +246,46 @@ void SendCoinsDialog::on_sendButton_clicked()
     if(prepareStatus.status != WalletModel::OK) {
         fNewRecipientAllowed = true;
         return;
+    }
+
+    // PoUS Phase 2B: Guard against accidental Glyph Carrier destruction
+    {
+        std::vector<uint16_t> spentGlyphEditions;
+        const CWalletTx* wtxPrepared = currentTransaction.getTransaction();
+        CWallet* pwallet = (model && model->getWallet()) ? model->getWallet() : pwalletMain;
+        if (wtxPrepared && pwallet) {
+            LOCK(pwallet->cs_wallet);
+            for (const CTxIn& txin : wtxPrepared->vin) {
+                if (pwallet->mapWallet.count(txin.prevout.hash)) {
+                    const CWalletTx& prevTx = pwallet->mapWallet[txin.prevout.hash];
+                    GlyphCarrierRecord rec;
+                    if (GetTxGlyphCarrier(prevTx, txin.prevout.n, rec)) {
+                        spentGlyphEditions.push_back(rec.edition);
+                    }
+                }
+            }
+        }
+
+        if (!spentGlyphEditions.empty()) {
+            QString editionsStr;
+            for (uint16_t ed : spentGlyphEditions) {
+                if (!editionsStr.isEmpty()) editionsStr += ", ";
+                editionsStr += QString("#%1").arg(ed);
+            }
+            QMessageBox::StandardButton reply = QMessageBox::critical(
+                this,
+                tr("\u26A0\uFE0F DANGER: PoUS Glyph Destruction Warning"),
+                tr("One or more selected coins is a <b>PoUS AI Glyph Carrier UTXO (%1)</b>.<br><br>"
+                   "Broadcasting this transaction will <b>PERMANENTLY DESTROY (BURN)</b> your PoUS Glyph on-chain!<br><br>"
+                   "Are you absolutely certain you want to destroy your Glyph?").arg(editionsStr),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::No
+            );
+            if (reply != QMessageBox::Yes) {
+                fNewRecipientAllowed = true;
+                return;
+            }
+        }
     }
 
     CAmount txFee = currentTransaction.getTransactionFee();

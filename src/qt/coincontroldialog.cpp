@@ -3,6 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "coincontroldialog.h"
+#include "airegistry.h"
 #include "ui_coincontroldialog.h"
 
 #include "addresstablemodel.h"
@@ -699,6 +700,22 @@ void CoinControlDialog::updateView()
             {
                 COutPoint outpt(txhash, out.i);
                 coinControl->UnSelect(outpt); // just to be sure
+                itemOutput->setDisabled(true);
+                itemOutput->setIcon(COLUMN_CHECKBOX, platformStyle->SingleColorIcon(":/icons/lock_closed"));
+            }
+
+            // PoUS Phase 2B: Glyph Carrier badge in Coin Control
+            GlyphCarrierRecord glyphRec;
+            if (GetTxGlyphCarrier(*out.tx, out.i, glyphRec)) {
+                QString glyphLabel = tr("\U0001F48E [PoUS Glyph #%1]").arg(glyphRec.edition);
+                itemOutput->setText(COLUMN_LABEL, glyphLabel);
+                itemOutput->setToolTip(COLUMN_LABEL,
+                    tr("PoUS AI Glyph Edition #%1\nHash: %2\nProtected carrier UTXO (10,000 sat)")
+                        .arg(glyphRec.edition)
+                        .arg(QString::fromStdString(glyphRec.glyphHash.ToString())));
+                // Force lock state (belt-and-suspenders — Auto-lock already handles this at wallet level)
+                COutPoint outpt(txhash, out.i);
+                coinControl->UnSelect(outpt);
                 itemOutput->setDisabled(true);
                 itemOutput->setIcon(COLUMN_CHECKBOX, platformStyle->SingleColorIcon(":/icons/lock_closed"));
             }

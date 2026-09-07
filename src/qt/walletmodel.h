@@ -213,6 +213,9 @@ public:
     void listCoins(std::map<QString, std::vector<COutput> >& mapCoins) const;
     void listMatureStakingCoins(std::vector<COutput>& vCoinsOut) const;
 
+    CWallet* getWallet() { return wallet; }
+    const CWallet* getWallet() const { return wallet; }
+
     bool isLockedCoin(uint256 hash, unsigned int n) const;
     void lockCoin(COutPoint& output);
     void unlockCoin(COutPoint& output);
