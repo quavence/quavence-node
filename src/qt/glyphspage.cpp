@@ -119,6 +119,11 @@ void GlyphsPage::updateGlyphs()
         for (const COutput& out : pair.second) {
             if (!out.tx) continue;
 
+            uint256 txhash = out.tx->GetHash();
+            if (walletModel->getWallet() && walletModel->getWallet()->IsSpent(txhash, out.i)) {
+                continue;
+            }
+
             GlyphCarrierRecord glyphRec;
             if (GetTxGlyphCarrier(*out.tx, out.i, glyphRec)) {
                 uint256 txhash = out.tx->GetHash();

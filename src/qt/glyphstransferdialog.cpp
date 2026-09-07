@@ -183,13 +183,17 @@ void GlyphTransferDialog::onTransferClicked()
         fCommitted = wallet->CommitTransaction(wtxNew, reservekey);
     }
 
-    if (!fCommitted) {
+    if (!fCommitted || !wtxNew.InMempool()) {
         if (wasLocked) {
             LOCK2(cs_main, wallet->cs_wallet);
             wallet->LockCoin(carrierOutpoint);
         }
+        {
+            LOCK2(cs_main, wallet->cs_wallet);
+            wallet->AbandonTransaction(wtxNew.GetHash());
+        }
         QMessageBox::critical(this, tr("Broadcast Failed"),
-            tr("Failed to commit and broadcast transaction to network."));
+            tr("Transaction was rejected by the network mempool. The unconfirmed transaction has been automatically cancelled."));
         return;
     }
 

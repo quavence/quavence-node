@@ -1477,7 +1477,7 @@ void CWallet::SyncTransaction(const CTransaction& tx, const CBlockIndex *pindex,
             GlyphCarrierRecord glyphRec;
             for (unsigned int i = 0; i < tx.vout.size(); ++i) {
                 if (tx.vout[i].nValue == GLYPH_CARRIER_DUST && IsMine(tx.vout[i])) {
-                    if (GetTxGlyphCarrier(tx, i, glyphRec)) {
+                    if (GetTxGlyphCarrier(tx, i, glyphRec) && !IsSpent(tx.GetHash(), i)) {
                         LockCoin(COutPoint(tx.GetHash(), i));
                         LogPrintf("PoUS: Auto-locked Glyph #%u carrier UTXO (%s:%u)\n",
                                   glyphRec.edition, tx.GetHash().ToString(), i);
@@ -3133,7 +3133,7 @@ DBErrors CWallet::LoadWallet(bool& fFirstRunRet)
         return nLoadWalletRet;
     fFirstRunRet = !vchDefaultKey.IsValid();
 
-    // PoUS Phase 2B: Warmup — auto-lock all existing Glyph Carrier UTXOs on startup
+    // PoUS Phase 2B: Warmup — auto-lock all unspent Glyph Carrier UTXOs on startup
     {
         LOCK2(cs_main, cs_wallet);
         GlyphCarrierRecord glyphRec;
@@ -3143,7 +3143,7 @@ DBErrors CWallet::LoadWallet(bool& fFirstRunRet)
             const CWalletTx& wtx = it->second;
             for (unsigned int i = 0; i < wtx.vout.size(); ++i) {
                 if (wtx.vout[i].nValue == GLYPH_CARRIER_DUST && IsMine(wtx.vout[i])) {
-                    if (GetTxGlyphCarrier(wtx, i, glyphRec)) {
+                    if (GetTxGlyphCarrier(wtx, i, glyphRec) && !IsSpent(it->first, i)) {
                         setLockedCoins.insert(COutPoint(it->first, i));
                     }
                 }
