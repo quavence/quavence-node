@@ -32,61 +32,6 @@ namespace {
     static const QString DEFAULT_LM_STUDIO_URL = "http://127.0.0.1:1234/v1";
     static const QString DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434";
     static const QString SETTINGS_GROUP = "AIWorker";
-
-    bool containsCyrillicText(const QString &text) {
-        static QRegularExpression re("[\\x0400-\\x04FF]");
-        return re.match(text).hasMatch();
-    }
-
-    QString resolveFirstUserMessage(const QJsonObject &turnInput) {
-        if (turnInput.contains("messages") && turnInput["messages"].isArray()) {
-            QJsonArray msgs = turnInput["messages"].toArray();
-            for (const QJsonValue &v : msgs) {
-                if (v.isObject()) {
-                    QJsonObject obj = v.toObject();
-                    QString role = obj["role"].toString().trimmed().toLower();
-                    QString content = obj["content"].toString().trimmed();
-                    if (role == "user" && !content.isEmpty()) {
-                        return content;
-                    }
-                }
-            }
-        }
-        return "";
-    }
-
-    QString buildHonestAssistantAck(const QString &ownerText, const QJsonObject &draftPatch, const QJsonArray &followUpChips) {
-        Q_UNUSED(ownerText);
-        QStringList filled;
-        if (draftPatch.contains("task") && !draftPatch["task"].isNull()) filled.append("Task");
-        if (draftPatch.contains("deliverables") && draftPatch["deliverables"].isArray() && !draftPatch["deliverables"].toArray().isEmpty()) filled.append("Deliverables");
-        if (draftPatch.contains("acceptance") && draftPatch["acceptance"].isArray() && !draftPatch["acceptance"].toArray().isEmpty()) filled.append("Acceptance");
-        if (draftPatch.contains("proof") && draftPatch["proof"].isArray() && !draftPatch["proof"].toArray().isEmpty()) filled.append("Proof");
-        if (draftPatch.contains("classification") && draftPatch["classification"].isObject()) filled.append("Classification");
-
-        QStringList empty;
-        if (!draftPatch.contains("deliverables") || !draftPatch["deliverables"].isArray() || draftPatch["deliverables"].toArray().isEmpty()) empty.append("Deliverables");
-        if (!draftPatch.contains("acceptance") || !draftPatch["acceptance"].isArray() || draftPatch["acceptance"].toArray().isEmpty()) empty.append("Acceptance");
-        if (!draftPatch.contains("proof") || !draftPatch["proof"].isArray() || draftPatch["proof"].toArray().isEmpty()) empty.append("Proof");
-
-        bool hasChips = !followUpChips.isEmpty();
-
-        if (filled.isEmpty()) {
-            return hasChips
-                ? "Nothing on the left yet — pick options below to collect facts."
-                : "Got it. Left draft is still empty — add detail in chat or write on the left.";
-        }
-        QString head = QString("Captured into draft: %1.").arg(filled.join(", "));
-        if (!empty.isEmpty() && hasChips) {
-            return QString("%1 Still empty: %2 — use options below or fill the left.").arg(head, empty.join(", "));
-        }
-        if (!empty.isEmpty()) {
-            return QString("%1 Still empty: %2 — fill the left or clarify in chat.").arg(head, empty.join(", "));
-        }
-        return hasChips
-            ? QString("%1 Review proposals on the left; options below if you need to refine.").arg(head)
-            : QString("%1 Review proposals on the left and Lock.").arg(head);
-    }
 }
 
 AIWorkerPage::AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent) :
@@ -821,7 +766,8 @@ void AIWorkerPage::onHubClaimReply(QNetworkReply *reply)
     reply->deleteLater();
 }
 
-void AIWorkerPage::dispatchTask(const QString &taskId, const QString &taskType, const QString &claimNonce, const QJsonObject &resultJson)
+void AIWorkerPage::dispatchTask(const QString &taskId, const QString &taskType,
+                                const QString &claimNonce, const QJsonObject &resultJson)
 {
     isTaskRunning = true;
     currentTaskId = taskId;
@@ -830,59 +776,22 @@ void AIWorkerPage::dispatchTask(const QString &taskId, const QString &taskType, 
     currentTurnInput = QJsonObject();
     updateNodeStatusBadge();
 
-    QString systemPrompt = "Return only valid JSON. Do not include markdown fences, comments, or explanatory text.";
-    QString userPrompt = "";
+    // Hub-First: prompt and system_prompt are pre-assembled by the Hub.
+    // The worker is a generic relay — it does not build prompts client-side.
+    QString systemPrompt = resultJson.value("system_prompt").toString(
+        "Return only valid JSON. Do not include markdown fences, comments, or extra text.");
+    QString userPrompt = resultJson.value("prompt").toString();
 
-    // 1. Bounty Composer Turn (Match Desktop Worker bountyComposerLlmService.js)
-    if (taskType == "TASK_BOUNTY_COMPOSER_TURN") {
-        systemPrompt = "WHO YOU ARE:\n"
-            "You are the Quavence Bounty Consultant in Task Composer.\n"
-            "You do structured extraction from facts into draft sections — not freeform brief writing.\n\n"
-            "HARD CONTOUR:\n"
-            "1) LANGUAGE SPLIT: assistantMessage + chip labels = first owner-message language; draft line text + chip values = English ONLY. Never put Russian (or mostly Cyrillic) text into draftPatch.title / task / deliverables / acceptance / proof — translate to English first.\n"
-            "2) FACTS ONLY: use only input.facts (+ confirmed lines). unknown -> null section or gaps[]. ambiguous -> gap. proven -> suggested line with sourceFactIds.\n"
-            "3) PROVENANCE: every draft line must be {text, sourceFactIds:[...fact ids]}. Lines without sourceFactIds are invalid.\n"
-            "4) DRAFTPATCH OBLIGATIONS: in draftPatch do not add metrics, sizes, SLAs, roles, channels, or process steps absent from facts. Completeness ideas belong in followUpChips — not silent draftPatch fills.\n"
-            "5) SECTION ROLES: title=short publishable classic-form label (English, ~6-12 words); task=hire outcome; deliverables=work artifacts handed over (format, channel, length, delivery package); acceptance=how work is judged (tone, grammar, style match, quality bar); proof=submission/application evidence only (links, screenshots). Screening asks go to proof, never deliverables.\n"
-            "6) TAXONOMY: only in draft mode. Catalog ids from hints.taxonomy. confidence 0..1.\n"
-            "7) MODE: return mode \"guidance\" | \"draft\".\n"
-            "   - guidance: operator still collecting a brief. Chips + asks only. No draft section fills.\n"
-            "   - draft: facts describe hireable work. Extract into sections with sourceFactIds. Always include draftPatch.title when task is filled.\n"
-            "7b) DRAFT COMPLETENESS (draft mode): when facts name concrete deliverables (icons, png, 512x512, zip), put each as a deliverables line with sourceFactIds. If acceptance/proof are absent, leave arrays empty and return gaps[].\n"
-            "7c) GAP PROPOSALS (draft mode): if acceptance/proof remain open, return 2-4 followUpChips that HELP CLOSE HOLES for a reviewable bounty. REQUIRED per chip: label (owner language, short choice) + value (English draft line) + section (deliverables|acceptance|proof). Examples: label \"Format & Size\", value \"All icons delivered as PNG 512x512, in a single zip file\", section \"deliverables\"; label \"Tone & Style\", value \"Clean, modern, minimalist style — no text or gradients\", section \"acceptance\"; label \"Screenshot\", value \"Attach a preview image of the icon set in a folder with filenames\", section \"proof\".\n"
-            "8) CHIPS: concrete Confirm-able choices only — never open questions. Chip labels = owner language; chip values = English draft lines.\n"
-            "9) CHAT: short dialogue. Say what was filled vs still empty on the left only when draft mode filled something. Keep assistantMessage in owner language.\n"
-            "10) JSON only.\n\n"
-            "OUTPUT SHAPE:\n"
-            "{\"mode\":\"draft\",\"assistantMessage\":\"string\",\"draftPatch\":{\"title\":{\"text\":\"string\",\"sourceFactIds\":[\"f_user_1\"]},\"task\":{\"text\":\"string\",\"sourceFactIds\":[\"f_user_1\"]},\"deliverables\":[{\"text\":\"string\",\"sourceFactIds\":[\"f_user_1\"]}],\"acceptance\":[],\"proof\":[],\"gaps\":[{\"section\":\"acceptance\",\"reason\":\"string\"}],\"classification\":{\"domainId\":\"design_creative\",\"subcategoryId\":null,\"typeId\":\"bounty\",\"difficultyId\":\"medium\",\"tagIds\":[],\"platformIds\":[],\"confidence\":0.85}},\"followUpChips\":[{\"label\":\"Format & Size\",\"value\":\"All icons delivered as PNG 512x512, in a single zip file\",\"section\":\"deliverables\"},{\"label\":\"Tone & Style\",\"value\":\"Clean, modern, minimalist style — no text or gradients\",\"section\":\"acceptance\"},{\"label\":\"Screenshot\",\"value\":\"Attach a preview image of the icon set in a folder with filenames\",\"section\":\"proof\"}]}";
-
-        if (resultJson.contains("turn_input") && resultJson["turn_input"].isObject()) {
-            currentTurnInput = resultJson["turn_input"].toObject();
-            QString firstUserMsg = resolveFirstUserMessage(currentTurnInput);
-            userPrompt = QString("LATEST OWNER MESSAGE (cite fact ids in draftPatch):\n%1\n\nCONTEXT (evidence only — do not echo keys):\n%2\n\nReply with ONLY one JSON object conforming to OUTPUT SHAPE. Ensure followUpChips are populated for open gaps (acceptance, proof).")
-                .arg(firstUserMsg, QString::fromUtf8(QJsonDocument(currentTurnInput).toJson(QJsonDocument::Indented)));
-        } else {
-            userPrompt = resultJson.contains("prompt") ? resultJson["prompt"].toString() : "Generate draft bounty structure.";
-        }
+    if (userPrompt.isEmpty()) {
+        logMessage(QString("Warning: task %1 has no prompt field. Task skipped.").arg(taskId), "AI");
+        isTaskRunning = false;
+        updateNodeStatusBadge();
+        return;
     }
-    // 2. RAG Knowledge Base Verification
-    else if (taskType == "TASK_RAG_IDLE_VERIFICATION") {
-        systemPrompt = "You are the Quavence Knowledge Base RAG Verification AI Worker.\n"
-            "Analyze the given knowledge base chunk according to instructions and return ONLY a valid JSON object matching the requested schema. Do not include markdown fences, comments, or extra text.";
 
-        QString instructions = resultJson.contains("instructions") ? resultJson["instructions"].toString() : "Analyze the chunk and extract question and answer.";
-        QJsonObject chunkObj = resultJson.value("chunk").toObject();
-        QString chunkText = chunkObj.value("text").toString();
-        QString chunkTitle = chunkObj.value("title").toString();
-        QJsonObject schemaObj = resultJson.value("expected_schema").toObject();
-        QString schemaStr = QString::fromUtf8(QJsonDocument(schemaObj).toJson(QJsonDocument::Compact));
-
-        userPrompt = QString("KNOWLEDGE BASE CHUNK [%1]:\n%2\n\nINSTRUCTIONS:\n%3\n\nEXPECTED JSON SCHEMA:\n%4\n\nReturn JSON matching schema:")
-            .arg(chunkTitle, chunkText, instructions, schemaStr);
-    }
-    // 3. All other tasks: send prompt directly (identical to Desktop Worker callLlm(prompt))
-    else {
-        userPrompt = resultJson.contains("prompt") ? resultJson["prompt"].toString() : QString::fromUtf8(QJsonDocument(resultJson).toJson(QJsonDocument::Compact));
+    // Store turn_input if present (for HMAC signing compatibility — backward compat)
+    if (resultJson.contains("turn_input") && resultJson["turn_input"].isObject()) {
+        currentTurnInput = resultJson["turn_input"].toObject();
     }
 
     executeInference(systemPrompt, userPrompt);
@@ -968,21 +877,17 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
 
 QJsonObject AIWorkerPage::parseTaskJsonOutput(const QString &rawText, const QString &taskType)
 {
+    Q_UNUSED(taskType);  // taskType больше не нужен — нет task-specific логики
+
     QString cleaned = rawText.trimmed();
-    if (cleaned.startsWith("```json")) {
-        cleaned = cleaned.mid(7);
-    }
-    if (cleaned.startsWith("```")) {
-        cleaned = cleaned.mid(3);
-    }
-    if (cleaned.endsWith("```")) {
-        cleaned = cleaned.left(cleaned.length() - 3);
-    }
+    if (cleaned.startsWith("```json")) cleaned = cleaned.mid(7);
+    if (cleaned.startsWith("```"))     cleaned = cleaned.mid(3);
+    if (cleaned.endsWith("```"))       cleaned = cleaned.left(cleaned.length() - 3);
     cleaned = cleaned.trimmed();
 
     // Extract first valid JSON object
     int start = cleaned.indexOf('{');
-    int end = cleaned.lastIndexOf('}');
+    int end   = cleaned.lastIndexOf('}');
     if (start >= 0 && end > start) {
         cleaned = cleaned.mid(start, end - start + 1);
     }
@@ -992,105 +897,13 @@ QJsonObject AIWorkerPage::parseTaskJsonOutput(const QString &rawText, const QStr
     if (doc.isObject()) {
         result = doc.object();
     } else {
+        // Fallback: wrap as plain text summary (Hub normalizer will handle)
         result["summary"] = cleaned.left(4000);
-        result["recommendations"] = QJsonArray();
-        result["positive_factors"] = QJsonArray();
     }
 
-    // 1. RAG Knowledge Base Verification schema guarantor
-    if (taskType == "TASK_RAG_IDLE_VERIFICATION") {
-        if (!result.contains("question") && result.contains("q")) result["question"] = result["q"];
-        if (!result.contains("answer") && result.contains("a")) result["answer"] = result["a"];
-        if (!result.contains("confidence") || result["confidence"].toDouble(0.0) <= 0) result["confidence"] = 0.95;
-        if (!result.contains("question") || result["question"].toString().length() < 5) {
-            result["question"] = "What is the key principle explained in this knowledge chunk?";
-        }
-        if (!result.contains("answer") || result["answer"].toString().length() < 10) {
-            result["answer"] = cleaned.length() >= 10 ? cleaned : "The provided knowledge base section describes protocol parameters and operational verification.";
-        }
-        if (!result.contains("coherence_score")) result["coherence_score"] = 0.95;
-        if (!result.contains("key_concepts")) {
-            QJsonArray arr;
-            arr.append("Quavence Protocol");
-            arr.append("PoUS Verification");
-            result["key_concepts"] = arr;
-        }
-        if (!result.contains("completeness_score")) result["completeness_score"] = 0.95;
-        if (!result.contains("clarity_score")) result["clarity_score"] = 0.95;
-        if (!result.contains("suggested_heading")) result["suggested_heading"] = "Protocol Architecture";
-        if (!result.contains("notes")) result["notes"] = "Verified chunk integrity.";
-    }
-
-    // 2. Exact alignment for TASK_BOUNTY_COMPOSER_TURN
-    if (taskType == "TASK_BOUNTY_COMPOSER_TURN") {
-        QString firstUserMsg = resolveFirstUserMessage(currentTurnInput);
-        bool ru = containsCyrillicText(firstUserMsg);
-
-        if (!result.contains("mode")) {
-            result["mode"] = "draft";
-        }
-
-        QJsonObject draftPatch = result.contains("draftPatch") && result["draftPatch"].isObject()
-            ? result["draftPatch"].toObject()
-            : (result.contains("draft_patch") && result["draft_patch"].isObject() ? result["draft_patch"].toObject() : QJsonObject());
-
-        // Ensure title and task exist
-        if (!draftPatch.contains("title") || draftPatch["title"].isNull()) {
-            QJsonObject titleObj;
-            titleObj["text"] = "Bounty Task";
-            QJsonArray factIds;
-            factIds.append("f_user_1");
-            titleObj["sourceFactIds"] = factIds;
-            draftPatch["title"] = titleObj;
-        }
-        if (!draftPatch.contains("task") || draftPatch["task"].isNull()) {
-            QJsonObject taskObj;
-            taskObj["text"] = firstUserMsg.left(2000);
-            QJsonArray factIds;
-            factIds.append("f_user_1");
-            taskObj["sourceFactIds"] = factIds;
-            draftPatch["task"] = taskObj;
-        }
-
-        // Process followUpChips
-        QJsonArray chips = result.contains("followUpChips") && result["followUpChips"].isArray()
-            ? result["followUpChips"].toArray()
-            : (result.contains("follow_up_chips") && result["follow_up_chips"].isArray() ? result["follow_up_chips"].toArray() : QJsonArray());
-
-        // If LLM returned empty chips, provide standard consultative proposals for gaps
-        if (chips.isEmpty()) {
-            QJsonObject chip1;
-            chip1["label"] = "Format & Size";
-            chip1["value"] = "All icons delivered as PNG 512x512, in a single zip file";
-            chip1["section"] = "deliverables";
-            chips.append(chip1);
-
-            QJsonObject chip2;
-            chip2["label"] = "Tone & Style";
-            chip2["value"] = "Clean, modern, minimalist style — no text or gradients";
-            chip2["section"] = "acceptance";
-            chips.append(chip2);
-
-            QJsonObject chip3;
-            chip3["label"] = "Screenshot";
-            chip3["value"] = "Attach a preview image of the icon set in a folder with filenames";
-            chip3["section"] = "proof";
-            chips.append(chip3);
-        }
-
-        // Normalize assistantMessage with buildHonestAssistantAck
-        QString assistantMsg = result.contains("assistantMessage") ? result["assistantMessage"].toString().trimmed() : "";
-        if (assistantMsg.isEmpty() || (ru && !containsCyrillicText(assistantMsg)) || assistantMsg.contains("Create 25", Qt::CaseInsensitive)) {
-            assistantMsg = buildHonestAssistantAck(firstUserMsg, draftPatch, chips);
-        }
-
-        result["assistantMessage"] = assistantMsg;
-        result["draftPatch"] = draftPatch;
-        result["followUpChips"] = chips;
-
-        if (!currentTurnInput.isEmpty()) {
-            result["turn_input"] = currentTurnInput;
-        }
+    // If turn_input was stored from claim, include it for Hub-side normalization
+    if (!currentTurnInput.isEmpty()) {
+        result["turn_input"] = currentTurnInput;
     }
 
     return result;
