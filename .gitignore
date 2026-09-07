@@ -192,3 +192,31 @@ deleted-wsl-stake-node-*/
 wallet-passphrase.txt
 quavence.conf
 build-*/
+
+# Logs, dumps, and temporary outputs
+*.out
+*.log
+
+# Internal specs and design notes
+coin-spec/
+
+# Local test, smoke, and utility scripts
+scripts/batch8_*
+scripts/admin_smoke_*
+scripts/write_*
+scripts/commit_msg_*
+scripts/run_tests_live.sh
+scripts/verify_qt_qrc.sh
+
+# Local genesis mining and setup/deployment utilities
+contrib/BUILD_AND_LAUNCH.txt
+contrib/cross-build-win64-wallet.sh
+contrib/deploy-vps-binary.sh
+contrib/genesis_mine*
+contrib/genesis_out.txt
+contrib/install-deps-debian.sh
+contrib/premine-relaunch-notes.txt
+contrib/scripts/
+contrib/vps-*.sh
+contrib/*.conf.example
+contrib/wsl-*.txt
