@@ -15,6 +15,7 @@ class OverviewPage;
 class PlatformStyle;
 class ReceiveCoinsDialog;
 class SendCoinsDialog;
+class GlyphsPage;
 class SendCoinsRecipient;
 class TransactionView;
 class WalletModel;
@@ -60,6 +61,7 @@ private:
     WalletModel *walletModel;
 
     OverviewPage *overviewPage;
+    GlyphsPage *glyphsPage;
     QWidget *transactionsPage;
     ReceiveCoinsDialog *receiveCoinsPage;
     SendCoinsDialog *sendCoinsPage;
@@ -77,6 +79,8 @@ public Q_SLOTS:
     void gotoOverviewPage();
     /** Switch to history (transactions) page */
     void gotoHistoryPage();
+    /** Switch to Glyphs page */
+    void gotoGlyphsPage();
     /** Switch to receive coins page */
     void gotoReceiveCoinsPage();
     /** Switch to send coins page */

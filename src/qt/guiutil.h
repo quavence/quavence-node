@@ -144,7 +144,8 @@ namespace GUIUtil
         Overview,
         Send,
         Receive,
-        Transactions
+        Transactions,
+        Glyphs
     };
 
     /** Filled miniapp-style toolbar icon (24×24 art in a 40×40 pixmap). */
