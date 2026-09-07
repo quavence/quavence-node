@@ -12,6 +12,7 @@
 class ClientModel;
 class WalletModel;
 class PlatformStyle;
+class QShowEvent;
 
 namespace Ui {
 class GlyphsPage;
@@ -47,6 +48,13 @@ public Q_SLOTS:
     void onTableDoubleClicked(int row, int column);
     void onCopyHashClicked();
     void onCopyAddressClicked();
+    void onCopyTxIdClicked();
+    void onCopyUtxoClicked();
+    void onCopyEditionClicked();
+    void onCustomContextMenu(const QPoint &pos);
+
+protected:
+    virtual void showEvent(QShowEvent *event) override;
 
 private:
     Ui::GlyphsPage *ui;
