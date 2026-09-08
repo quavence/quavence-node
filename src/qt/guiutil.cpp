@@ -581,7 +581,7 @@ static QString brandStyleSheet()
         "QTableView { gridline-color: %2; selection-background-color: %3; selection-color: #111418; }"
         "QLineEdit, QTextEdit, QPlainTextEdit, QComboBox { border: 1px solid %5; border-radius: 6px; padding: 3px 6px; background: #ffffff; }"
         "QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus { border-color: %4; }"
-        "QProgressBar { border: 1px solid %5; border-radius: 6px; background: %2; text-align: center; color: %1; }"
+        "QProgressBar { border: 1px solid %5; border-radius: 6px; background: %2; text-align: center; color: #ffffff; font-weight: bold; }"
         "QProgressBar::chunk { background: %4; border-radius: 5px; }"
     ).arg(muted, divider, highlightBg, primary, border, accent);
 }

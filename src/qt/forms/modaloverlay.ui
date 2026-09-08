@@ -32,7 +32,7 @@
    <item>
     <widget class="QWidget" name="bgWidget" native="true">
      <property name="styleSheet">
-      <string notr="true">#bgWidget { background: rgba(0,0,0,220); }</string>
+      <string notr="true">#bgWidget { background: rgba(0,0,0,120); }</string>
      </property>
      <layout class="QVBoxLayout" name="verticalLayoutMain" stretch="1">
       <property name="leftMargin">
@@ -51,15 +51,20 @@
        <widget class="QWidget" name="contentWidget" native="true">
         <property name="styleSheet">
          <string notr="true">#contentWidget {
-    background: rgba(18, 24, 38, 240);
-    border-radius: 6px;
-    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255, 255, 255, 250);
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
 }
 QLabel {
-    color: #e2e8f0;
+    color: #1e293b;
 }
 QLabel[styleClass="secondary"] {
-    color: #94a3b8;
+    color: #64748b;
+}
+QPushButton#warningIcon {
+    background: transparent;
+    border: none;
+    padding: 0px;
 }</string>
         </property>
         <layout class="QVBoxLayout" name="verticalLayoutSub" stretch="1,0,0,0">
@@ -80,6 +85,9 @@ QLabel[styleClass="secondary"] {
          </property>
          <item>
           <layout class="QHBoxLayout" name="horizontalLayoutIconText" stretch="0,1">
+           <property name="spacing">
+            <number>20</number>
+           </property>
            <property name="topMargin">
             <number>20</number>
            </property>
@@ -92,6 +100,9 @@ QLabel[styleClass="secondary"] {
               <widget class="QPushButton" name="warningIcon">
                <property name="enabled">
                 <bool>false</bool>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">border: none; background: transparent; padding: 0px;</string>
                </property>
                <property name="text">
                 <string/>
@@ -283,11 +294,11 @@ QLabel[styleClass="secondary"] {
               <widget class="QProgressBar" name="progressBar">
                <property name="styleSheet">
                 <string notr="true">QProgressBar {
-    border: 1px solid #1d4ed8;
+    border: 1px solid #cbd5e1;
     border-radius: 4px;
-    background-color: #1e293b;
+    background-color: #f1f5f9;
     color: #ffffff;
-    font-weight: 500;
+    font-weight: 600;
     text-align: center;
 }
 QProgressBar::chunk {
