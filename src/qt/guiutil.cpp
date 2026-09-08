@@ -272,7 +272,7 @@ bool parseBitcoinURI(const QString &scheme, const QUrl &uri, SendCoinsRecipient 
 bool parseBitcoinURI(const QString &scheme, QString uri, SendCoinsRecipient *out)
 {
     //
-    //    Cannot handle this later, because blackcoin://
+    //    Cannot handle this later, because quavence://
     //    will cause Qt to see the part after // as host,
     //    which will lower-case it (and thus invalidate the address).
     if (uri.startsWith(scheme + "://", Qt::CaseInsensitive))
@@ -581,7 +581,7 @@ static QString brandStyleSheet()
         "QTableView { gridline-color: %2; selection-background-color: %3; selection-color: #111418; }"
         "QLineEdit, QTextEdit, QPlainTextEdit, QComboBox { border: 1px solid %5; border-radius: 6px; padding: 3px 6px; background: #ffffff; }"
         "QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus { border-color: %4; }"
-        "QProgressBar { border: 1px solid %5; border-radius: 6px; background: %2; text-align: center; color: %1; }"
+        "QProgressBar { border: 1px solid %5; border-radius: 6px; background: %2; text-align: center; color: #ffffff; font-weight: bold; }"
         "QProgressBar::chunk { background: %4; border-radius: 5px; }"
     ).arg(muted, divider, highlightBg, primary, border, accent);
 }
@@ -1336,11 +1336,11 @@ QString formateNiceTimeOffset(qint64 secs)
     const int YEAR_IN_SECONDS = 31556952; // Average length of year in Gregorian calendar
     if(secs < 60)
     {
-        timeBehindText = QObject::tr("%n seconds(s)","",secs);
+        timeBehindText = QObject::tr("%n second(s)","",secs);
     }
     else if(secs < 2*HOUR_IN_SECONDS)
     {
-        timeBehindText = QObject::tr("%n minutes(s)","",secs/60);
+        timeBehindText = QObject::tr("%n minute(s)","",secs/60);
     }
     else if(secs < 2*DAY_IN_SECONDS)
     {
