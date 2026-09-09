@@ -32,6 +32,7 @@ class CNetAddr
     protected:
         unsigned char ip[16]; // in network byte order
         uint32_t scopeId; // for scoped/link-local ipv6 addresses
+        std::vector<unsigned char> vchTorV3; // 32-byte Ed25519 pubkey for Tor v3
 
     public:
         CNetAddr();
@@ -62,6 +63,8 @@ class CNetAddr
         bool IsRFC6052() const; // IPv6 well-known prefix (64:FF9B::/96)
         bool IsRFC6145() const; // IPv6 IPv4-translated address (::FFFF:0:0:0/96)
         bool IsTor() const;
+        bool IsTorV3() const { return vchTorV3.size() == 32; }
+        const std::vector<unsigned char>& GetTorV3() const { return vchTorV3; }
         bool IsLocal() const;
         bool IsRoutable() const;
         bool IsValid() const;
