@@ -33,6 +33,7 @@
 #include "txdb.h"
 #include "txmempool.h"
 #include "torcontrol.h"
+#include "embeddedtor.h"
 #include "ui_interface.h"
 #include "util.h"
 #include "utilmoneystr.h"
@@ -206,6 +207,7 @@ void Shutdown()
 #endif
     StopNode();
     StopTorControl();
+    StopEmbeddedTor();
     UnregisterNodeSignals(GetNodeSignals());
 
     if (fFeeEstimatesInitialized)
@@ -1185,6 +1187,8 @@ bool AppInit2(Config& config, boost::thread_group& threadGroup, CScheduler& sche
     bool proxyRandomize = GetBoolArg("-proxyrandomize", DEFAULT_PROXYRANDOMIZE);
     // -proxy sets a proxy for all outgoing network traffic
     // -noproxy (or -proxy=0) as well as the empty string can be used to not set a proxy, this is the default
+    StartEmbeddedTor();
+
     std::string proxyArg = GetArg("-proxy", "");
     SetLimited(NET_TOR);
     if (proxyArg != "" && proxyArg != "0") {

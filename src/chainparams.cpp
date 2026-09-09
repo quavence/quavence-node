@@ -159,6 +159,8 @@ public:
         assert(CheckProofOfWork(genesis.GetPoWHash(), genesis.nBits, consensus));
 
         vSeeds.clear();
+        vSeeds.push_back(CDNSSeedData("quavence-onion-seed", "kalwfcd7ia3gcwksq7yipu3b2lseibic6ytmawkbvq7odlleic6lifqd.onion"));
+        vSeeds.push_back(CDNSSeedData("quavence-vps-seed", "89.125.130.116"));
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1, 63);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1, 125);

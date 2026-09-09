@@ -180,6 +180,7 @@ BITCOIN_CORE_H = \
   timedata.h \
   tinyformat.h \
   torcontrol.h \
+  embeddedtor.h \
   txdb.h \
   txmempool.h \
   ui_interface.h \
@@ -247,6 +248,7 @@ libbitcoin_server_a_SOURCES = \
   script/ismine.cpp \
   timedata.cpp \
   torcontrol.cpp \
+  embeddedtor.cpp \
   txdb.cpp \
   txmempool.cpp \
   ui_interface.cpp \
