@@ -220,3 +220,13 @@ contrib/scripts/
 contrib/vps-*.sh
 contrib/*.conf.example
 contrib/wsl-*.txt
+
+# Quavence binaries and build outputs
+quavence-cli*
+quavenced*
+quavence-qt*
+quavence-tx*
+src/quavenced
+src/quavence-cli
+src/quavence-tx
+src/qt/quavence-qt

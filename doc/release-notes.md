@@ -1,116 +1,25 @@
-22.0 Release Notes
-==================
+# Quavence Core Release Notes
 
-Bitcoin Core version 22.0 is now available from:
+This directory contains the release notes for all published versions of Quavence Core (quavenced, quavence-cli, and quavence-qt).
 
-  <https://bitcoincore.org/bin/bitcoin-core-22.0/>
-
-This release includes new features, various bug fixes and performance
-improvements, as well as updated translations.
-
-Please report bugs using the issue tracker at GitHub:
-
-  <https://github.com/bitcoin/bitcoin/issues>
-
-To receive security and update notifications, please subscribe to:
-
-  <https://bitcoincore.org/en/list/announcements/join/>
-
-How to Upgrade
-==============
-
-If you are running an older version, shut it down. Wait until it has completely
-shut down (which might take a few minutes in some cases), then run the
-installer (on Windows) or just copy over `/Applications/Bitcoin-Qt` (on Mac)
-or `bitcoind`/`bitcoin-qt` (on Linux).
-
-Upgrading directly from a version of Bitcoin Core that has reached its EOL is
-possible, but it might take some time if the data directory needs to be migrated. Old
-wallet versions of Bitcoin Core are generally supported.
-
-Compatibility
-==============
-
-Bitcoin Core is supported and extensively tested on operating systems
-using the Linux kernel, macOS 10.14+, and Windows 7 and newer.  Bitcoin
-Core should also work on most other Unix-like systems but is not as
-frequently tested on them.  It is not recommended to use Bitcoin Core on
-unsupported systems.
-
-From Bitcoin Core 22.0 onwards, macOS versions earlier than 10.14 are no longer supported.
-
-Notable changes
-===============
-
-P2P and network changes
------------------------
-
-New and Updated RPCs
---------------------
-
-Build System
-------------
-
-Files
------
-
-New settings
-------------
-
-Updated settings
-----------------
-
-Tools and Utilities
--------------------
-
-Wallet
-------
-
-GUI changes
------------
-
-Low-level changes
-=================
-
-RPC
 ---
 
-Tests
------
+## 🌟 Quavence 15.x Line (Mainnet Architecture & PoUS)
 
-22.0 change log
-===============
+- [**Quavence Core v15.1.0**](release-notes/release-notes-15.1.0.md) (Protocol 70015)
+  - **Native Tor v3 Hidden Services (BIP155 / ED25519-V3)** with SHA3-256 checksums and automated SAFECOOKIE onion service creation.
+  - **Standalone All-in-One Windows GUI Wallet** with embedded background Tor daemon for zero-configuration privacy and censorship resistance.
+  - **Permanent Built-in Tor & Clearnet Seednodes** in `chainparams.cpp`.
+  - Official multi-platform binary releases and SHA-256 verification sums.
 
-A detailed list of changes in this version follows. To keep the list to a manageable length, small refactors and typo fixes are not included, and similar changes are sometimes condensed into one line.
+- [**Quavence Core v15.0.0**](release-notes/release-notes-15.0.0.md) (Protocol 70015)
+  - **Proof-of-Useful-Stake (PoUS) Stake Boost v1.1** (+20% to +50% dynamic tier boosts bound to on-chain AI attestations).
+  - **Zero-I/O Pubkey Extraction** from `scriptSig` in `TxSpendsFromKeyID` for rapid consensus verification without disk lookups.
+  - **`CStakeCache` Architecture** streamlining high-frequency PoS 3.0 block minting.
+  - **PoUS All-in-One Qt GUI Wallet** with built-in AI Worker tab and real-time accrued rewards telemetry.
 
-### Consensus
+---
 
-### Policy
+## Upstream Legacy Notes (Historical Reference)
 
-### Mining
-
-### Block and transaction handling
-
-### P2P protocol and network code
-
-### Wallet
-
-### RPC and other APIs
-
-### GUI
-
-### Build system
-
-### Tests and QA
-
-### Miscellaneous
-
-### Documentation
-
-Credits
-=======
-
-Thanks to everyone who directly contributed to this release:
-
-As well as to everyone that helped with translations on
-[Transifex](https://www.transifex.com/bitcoin/bitcoin/).
+Legacy release notes from the upstream base codebases (Bitcoin Core and Blackcoin More) are preserved in the [release-notes/](release-notes/) subdirectory for cryptographic and protocol heritage tracking.
