@@ -178,10 +178,12 @@ public:
         fTestnetToBeDeprecatedFieldRPC = false;
 
         checkpointData = (CCheckpointData){
-            boost::assign::map_list_of(0, consensus.hashGenesisBlock),
-            (int64_t)1778878800,
-            0,
-            0.0};
+            boost::assign::map_list_of
+            (0, consensus.hashGenesisBlock)
+            (500, uint256S("2c0f6de779c88eb142668f59fd2c8cc8f2b16cdf9b0c6e0b3f84d786033b04f3")),
+            (int64_t)1789236928,
+            532,
+            0.05};
 
         vDevFundAddress = { "SXbKabuHh7xn3QuXF7DMG758D9j4rVcL6V" };
         nDevFundDonationPercent = 15;
