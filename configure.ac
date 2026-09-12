@@ -2,7 +2,7 @@ AC_PREREQ([2.69])
 dnl Quavence: bump _CLIENT_VERSION_BUILD (or MINOR) for every published binary pair (quavenced + quavence-qt).
 dnl Keep the one-line VERSION file in the repo root in sync with these four lines.
 define(_CLIENT_VERSION_MAJOR, 15)
-define(_CLIENT_VERSION_MINOR, 0)
+define(_CLIENT_VERSION_MINOR, 1)
 define(_CLIENT_VERSION_BUILD, 0)
 define(_CLIENT_VERSION_IS_RELEASE, true)
 define(_COPYRIGHT_YEAR, 2026)
