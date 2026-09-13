@@ -39,9 +39,10 @@ PoUS dynamically recalculates node staking tiers over a rolling **1,440-block wi
 
 | Tier Level | Requirement (Rolling 1440 Blocks) | Staking Boost Multiplier | Effective Network Status |
 |---|---|---|---|
-| **Tier 3 (Max Boost)** | ≥ 10 Verified Tasks completed | **+50%** Staking Weight | `Active (Tier 3)` |
-| **Tier 2 (High Boost)** | 5 – 9 Verified Tasks completed | **+35%** Staking Weight | `Active (Tier 2)` |
-| **Tier 1 (Base Boost)** | 1 – 4 Verified Tasks completed | **+20%** Staking Weight | `Active (Tier 1)` |
+| **Tier 4 (Max Boost)** | ≥ 51 Verified Tasks completed | **+50%** Staking Weight | `Active (Tier 4)` |
+| **Tier 3 (High Boost)** | 21 – 50 Verified Tasks completed | **+40%** Staking Weight | `Active (Tier 3)` |
+| **Tier 2 (Mid Boost)** | 6 – 20 Verified Tasks completed | **+30%** Staking Weight | `Active (Tier 2)` |
+| **Tier 1 (Base Boost)** | 1 – 5 Verified Tasks completed | **+20%** Staking Weight | `Active (Tier 1)` |
 | **Standby** | 0 Verified Tasks completed | **0%** (Standard PoS Base) | `Standby` |
 
 ---
