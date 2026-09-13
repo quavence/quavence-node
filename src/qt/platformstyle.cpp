@@ -93,9 +93,16 @@ PlatformStyle::PlatformStyle(const QString &name, bool imagesOnButtons, bool col
         else
             colorbase = colorHighlightFg;
         singleColor = colorbase;
+        // Fallback guard: ensure crisp contrast on light backgrounds under Wayland/dark themes
+        if (singleColor.lightness() > 160) {
+            singleColor = COLOR_BRAND_MUTED;
+        }
     }
     // Determine text color
     textColor = QColor(QApplication::palette().color(QPalette::WindowText));
+    if (textColor.lightness() > 160) {
+        textColor = COLOR_BRAND_TEXT;
+    }
 }
 
 QImage PlatformStyle::SingleColorImage(const QString& filename) const

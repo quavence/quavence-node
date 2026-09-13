@@ -559,42 +559,84 @@ static QString brandStyleSheet()
         .arg(COLOR_BRAND_PRIMARY.red()).arg(COLOR_BRAND_PRIMARY.green()).arg(COLOR_BRAND_PRIMARY.blue());
 
     return QString(
-        "QMainWindow { background: #ffffff; }"
-        "QDialog { background: #ffffff; }"
+        "QMainWindow, QDialog, QWidget#centralWidget { background: #ffffff; color: #111418; }"
+        "QWidget { color: #111418; }"
+        "QLabel { color: #111418; background: transparent; }"
+        "QLabel:disabled { color: %1; }"
         "QMenuBar { background: #ffffff; color: %1; border-bottom: 1px solid %2; padding: 1px 0; }"
-        "QMenuBar::item { padding: 3px 8px; }"
+        "QMenuBar::item { padding: 3px 8px; color: %1; background: transparent; }"
         "QMenuBar::item:selected { background: %3; color: %4; }"
+        "QMenu { background: #ffffff; color: #111418; border: 1px solid %5; padding: 4px 0; }"
+        "QMenu::item { padding: 4px 24px 4px 20px; color: #111418; background: transparent; }"
+        "QMenu::item:selected { background: %3; color: %4; }"
+        "QMenu::item:disabled { color: %1; }"
+        "QMenu::separator { height: 1px; background: %2; margin: 4px 8px; }"
         "QToolBar { background: #ffffff; border-bottom: 1px solid %2; spacing: 4px; padding: 1px 4px; }"
-        "QToolBar QToolButton { color: %1; padding: 3px 10px; border: none; border-radius: 0; }"
+        "QToolBar QToolButton { color: %1; padding: 3px 10px; border: none; border-radius: 0; background: transparent; }"
         "QToolBar QToolButton:hover { background: %3; color: %4; }"
         "QToolBar QToolButton:checked { color: %4; background: %3; border: none; border-bottom: 2px solid %4; border-radius: 0; margin-bottom: -1px; }"
         "QStatusBar { background: #ffffff; color: %1; border-top: 1px solid %2; }"
-        "QTabBar::tab { color: %1; padding: 6px 12px; border-radius: 0; }"
+        "QStatusBar QLabel { color: %1; }"
+        "QTabBar::tab { color: %1; padding: 6px 12px; border-radius: 0; background: transparent; }"
         "QTabBar::tab:selected { color: %4; border-bottom: 2px solid %4; border-radius: 0; }"
-        "QGroupBox { font-weight: bold; color: %4; border: 1px solid %5; border-radius: 8px; margin-top: 8px; padding-top: 12px; }"
-        "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; color: %4; }"
+        "QGroupBox { font-weight: bold; color: %4; border: 1px solid %5; border-radius: 8px; margin-top: 8px; padding-top: 12px; background: #ffffff; }"
+        "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; color: %4; background: #ffffff; }"
         "QPushButton { padding: 5px 14px; border-radius: 6px; border: 1px solid %5; background: #ffffff; color: #111418; }"
         "QPushButton:hover { border-color: %4; color: %4; background: %3; }"
         "QPushButton:default { background: %4; color: #ffffff; border: 1px solid %4; }"
         "QPushButton:default:hover { background: %6; border-color: %6; }"
+        "QPushButton:disabled { background: #f8f9fa; color: %1; border-color: %2; }"
         "QHeaderView::section { background: #ffffff; color: %1; padding: 4px; border: none; border-bottom: 1px solid %2; }"
-        "QTableView { gridline-color: %2; selection-background-color: %3; selection-color: #111418; }"
-        "QLineEdit, QTextEdit, QPlainTextEdit, QComboBox { border: 1px solid %5; border-radius: 6px; padding: 3px 6px; background: #ffffff; }"
+        "QTableView, QTreeView, QListView { background: #ffffff; color: #111418; gridline-color: %2; selection-background-color: %3; selection-color: #111418; alternate-background-color: #f8f9fa; }"
+        "QLineEdit, QTextEdit, QPlainTextEdit, QComboBox { border: 1px solid %5; border-radius: 6px; padding: 3px 6px; background: #ffffff; color: #111418; selection-background-color: %3; selection-color: #111418; }"
         "QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus { border-color: %4; }"
+        "QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled, QComboBox:disabled { background: #f8f9fa; color: %1; border-color: %2; }"
+        "QComboBox QAbstractItemView { background: #ffffff; color: #111418; selection-background-color: %3; selection-color: %4; border: 1px solid %5; }"
+        "QToolTip { background: #111418; color: #ffffff; border: 1px solid #111418; border-radius: 4px; padding: 4px 8px; }"
         "QProgressBar { border: 1px solid %5; border-radius: 6px; background: %2; text-align: center; color: #ffffff; font-weight: bold; }"
         "QProgressBar::chunk { background: %4; border-radius: 5px; }"
+        "QScrollBar:vertical { background: #ffffff; width: 10px; margin: 0; }"
+        "QScrollBar::handle:vertical { background: %5; min-height: 20px; border-radius: 5px; }"
+        "QScrollBar::handle:vertical:hover { background: %1; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
     ).arg(muted, divider, highlightBg, primary, border, accent);
 }
 
 void InitBrandPalette()
 {
     QPalette pal = QApplication::palette();
-    pal.setColor(QPalette::Window, Qt::white);
-    pal.setColor(QPalette::Base, Qt::white);
-    pal.setColor(QPalette::Highlight, QColor(240, 247, 255)); /* miniapp --success-bg */
+    const QColor textPrimary = COLOR_BRAND_TEXT;
+    const QColor textMuted = COLOR_BRAND_MUTED;
+    const QColor bgWhite(Qt::white);
+    const QColor bgAlt(248, 249, 250);
+    const QColor bgHighlight(240, 247, 255);
+
+    // Active & Inactive states
+    pal.setColor(QPalette::Window, bgWhite);
+    pal.setColor(QPalette::WindowText, textPrimary);
+    pal.setColor(QPalette::Base, bgWhite);
+    pal.setColor(QPalette::AlternateBase, bgAlt);
+    pal.setColor(QPalette::Text, textPrimary);
+    pal.setColor(QPalette::Button, bgWhite);
+    pal.setColor(QPalette::ButtonText, textPrimary);
+    pal.setColor(QPalette::BrightText, Qt::white);
+    pal.setColor(QPalette::ToolTipBase, textPrimary);
+    pal.setColor(QPalette::ToolTipText, Qt::white);
+    pal.setColor(QPalette::Highlight, bgHighlight);
     pal.setColor(QPalette::HighlightedText, COLOR_BRAND_PRIMARY);
     pal.setColor(QPalette::Link, COLOR_BRAND_ACCENT);
     pal.setColor(QPalette::LinkVisited, COLOR_BRAND_PRIMARY.darker(115));
+
+    // Disabled state
+    pal.setColor(QPalette::Disabled, QPalette::Window, bgWhite);
+    pal.setColor(QPalette::Disabled, QPalette::WindowText, textMuted);
+    pal.setColor(QPalette::Disabled, QPalette::Base, bgWhite);
+    pal.setColor(QPalette::Disabled, QPalette::Text, textMuted);
+    pal.setColor(QPalette::Disabled, QPalette::Button, bgWhite);
+    pal.setColor(QPalette::Disabled, QPalette::ButtonText, textMuted);
+    pal.setColor(QPalette::Disabled, QPalette::Highlight, QColor(220, 225, 230));
+    pal.setColor(QPalette::Disabled, QPalette::HighlightedText, textMuted);
+
     QApplication::setPalette(pal);
     qApp->setStyleSheet(brandStyleSheet());
 }

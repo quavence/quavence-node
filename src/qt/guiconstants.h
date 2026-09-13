@@ -29,6 +29,7 @@ static const bool DEFAULT_SPLASHSCREEN = true;
 /* Quavence brand — aligned with TG miniapp (styles.css) */
 #define COLOR_BRAND_PRIMARY QColor(37, 99, 235)   /* #2563eb Logo5 / headings */
 #define COLOR_BRAND_ACCENT QColor(47, 125, 246)   /* #2f7df6 miniapp --accent */
+#define COLOR_BRAND_TEXT QColor(17, 20, 24)       /* #111418 miniapp --text */
 #define COLOR_BRAND_MUTED QColor(95, 102, 120)    /* #5f6678 miniapp --text-muted */
 #define COLOR_BRAND_COPYRIGHT_LEGACY QColor(139, 149, 166) /* #8b95a6 miniapp --text-dim */
 #define COLOR_BRAND_BORDER QColor(223, 227, 234)    /* #dfe3ea miniapp --card-border */

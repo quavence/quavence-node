@@ -316,6 +316,9 @@ BitcoinApplication::BitcoinApplication(int &argc, char **argv):
 {
     setQuitOnLastWindowClosed(false);
 
+    // Initialize Brand Palette early so PlatformStyle queries the brand palette
+    GUIUtil::InitBrandPalette();
+
     // UI per-platform customization
     // This must be done inside the BitcoinApplication constructor, or after it, because
     // PlatformStyle::instantiate requires a QApplication
