@@ -26,12 +26,81 @@
 #include <QRegularExpression>
 #include <QUrl>
 #include <QUrlQuery>
+#include <openssl/ssl.h>
+#include <openssl/crypto.h>
+#include <QtNetwork/QSslSocket>
+#include <QtNetwork/QSslConfiguration>
+#include <QtNetwork/QSslCertificate>
+#include <QtNetwork/QSslError>
+#include <QFile>
+#include <QSet>
 
 namespace {
     static const QString DEFAULT_HUB_BASE_URL = "https://quavence.com";
     static const QString DEFAULT_LM_STUDIO_URL = "http://127.0.0.1:1234/v1";
     static const QString DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434";
     static const QString SETTINGS_GROUP = "AIWorker";
+}
+
+
+void AIWorkerPage::EnsureSslCertificatesLoaded()
+{
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+    OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, nullptr);
+#else
+    SSL_library_init();
+#endif
+
+    if (!QSslSocket::supportsSsl()) {
+        qWarning() << "[SSL] QSslSocket reports SSL is NOT supported! Build:"
+                   << QSslSocket::sslLibraryBuildVersionString()
+                   << "Loaded:" << QSslSocket::sslLibraryVersionString();
+        return;
+    }
+
+    QList<QSslCertificate> certs = QSslConfiguration::systemCaCertificates();
+
+    static const QStringList certLocations = {
+        QStringLiteral("/etc/ssl/certs/ca-certificates.crt"),
+        QStringLiteral("/etc/pki/tls/certs/ca-bundle.crt"),
+        QStringLiteral("/etc/ssl/ca-bundle.pem"),
+        QStringLiteral("/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"),
+        QStringLiteral("/etc/ssl/cert.pem"),
+        QStringLiteral("/usr/share/ca-certificates/ca-certificates.crt"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/../share/ca-certificates/ca-certificates.crt"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/../etc/ssl/certs/ca-certificates.crt")
+    };
+
+    QByteArray envCertFile = qgetenv("SSL_CERT_FILE");
+    if (!envCertFile.isEmpty() && QFile::exists(QString::fromLocal8Bit(envCertFile))) {
+        certs.append(QSslCertificate::fromPath(QString::fromLocal8Bit(envCertFile)));
+    }
+
+    for (const QString &loc : certLocations) {
+        if (QFile::exists(loc)) {
+            certs.append(QSslCertificate::fromPath(loc));
+        }
+    }
+
+    QList<QSslCertificate> uniqueCerts;
+    QSet<QByteArray> digests;
+    for (const QSslCertificate &cert : certs) {
+        if (cert.isNull()) continue;
+        QByteArray d = cert.digest();
+        if (!digests.contains(d)) {
+            digests.insert(d);
+            uniqueCerts.append(cert);
+        }
+    }
+
+    if (!uniqueCerts.isEmpty()) {
+        QSslConfiguration conf = QSslConfiguration::defaultConfiguration();
+        conf.setCaCertificates(uniqueCerts);
+        QSslConfiguration::setDefaultConfiguration(conf);
+        qInfo() << "[SSL] Successfully configured" << uniqueCerts.size() << "CA root certificates.";
+    } else {
+        qWarning() << "[SSL] Warning: No CA root certificates could be found in system or bundled paths!";
+    }
 }
 
 AIWorkerPage::AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent) :
@@ -60,6 +129,7 @@ AIWorkerPage::AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent) 
     hubRequiredGenModel("qwen/qwen3-vl-8b"),
     hubRequiredEmbedModel("text-embedding-nomic-embed-text-v2-moe")
 {
+    EnsureSslCertificatesLoaded();
     ui->setupUi(this);
 
     // Initialize Provider Combo
@@ -359,6 +429,11 @@ void AIWorkerPage::onPeriodicRefresh()
         req.setRawHeader("Authorization", QString("Bearer %1").arg(token).toUtf8());
 
         QNetworkReply *reply = networkManager->get(req);
+        connect(reply, &QNetworkReply::sslErrors, this, [this](const QList<QSslError> &errors) {
+            for (const auto &err : errors) {
+                logMessage(QString("Overview Sync SSL Error: %1").arg(err.errorString()), "SSL");
+            }
+        });
         connect(reply, &QNetworkReply::finished, this, [this, reply]() {
             reply->deleteLater();
             if (reply->error() != QNetworkReply::NoError) return;
@@ -594,6 +669,11 @@ void AIWorkerPage::fetchHubRuntimePolicy()
     }
 
     QNetworkReply *reply = networkManager->get(request);
+    connect(reply, &QNetworkReply::sslErrors, this, [this](const QList<QSslError> &errors) {
+        for (const auto &err : errors) {
+            logMessage(QString("Policy Sync SSL Error: %1").arg(err.errorString()), "SSL");
+        }
+    });
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         onHubPolicyReply(reply);
     });
@@ -654,6 +734,11 @@ void AIWorkerPage::sendHubHeartbeat()
     QJsonObject payload;
     QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
     QNetworkReply *reply = networkManager->post(request, body);
+    connect(reply, &QNetworkReply::sslErrors, this, [this](const QList<QSslError> &errors) {
+        for (const auto &err : errors) {
+            logMessage(QString("Heartbeat SSL Error: %1").arg(err.errorString()), "SSL");
+        }
+    });
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         onHubHeartbeatReply(reply);
     });
@@ -712,6 +797,11 @@ void AIWorkerPage::pollHubTask()
 
     QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
     QNetworkReply *reply = networkManager->post(request, body);
+    connect(reply, &QNetworkReply::sslErrors, this, [this](const QList<QSslError> &errors) {
+        for (const auto &err : errors) {
+            logMessage(QString("Task Claim SSL Error: %1").arg(err.errorString()), "SSL");
+        }
+    });
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         onHubClaimReply(reply);
     });
@@ -975,6 +1065,11 @@ void AIWorkerPage::submitTaskResult(const QString &taskId, const QString &taskTy
 
     QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
     QNetworkReply *reply = networkManager->post(request, body);
+    connect(reply, &QNetworkReply::sslErrors, this, [this](const QList<QSslError> &errors) {
+        for (const auto &err : errors) {
+            logMessage(QString("Task Submit SSL Error: %1").arg(err.errorString()), "SSL");
+        }
+    });
     connect(reply, &QNetworkReply::finished, this, [this, reply, taskId]() {
         onHubSubmitReply(reply);
     });

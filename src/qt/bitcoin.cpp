@@ -23,6 +23,7 @@
 
 #ifdef ENABLE_WALLET
 #include "paymentserver.h"
+#include "aiworkerpage.h"
 #include "walletmodel.h"
 #endif
 
@@ -454,6 +455,7 @@ void BitcoinApplication::initializeResult(int retval)
         qWarning() << "Platform customization:" << platformStyle->getName();
 #ifdef ENABLE_WALLET
         PaymentServer::LoadRootCAs();
+        AIWorkerPage::EnsureSslCertificatesLoaded();
         paymentServer->setOptionsModel(optionsModel);
 #endif
 
