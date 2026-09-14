@@ -37,6 +37,8 @@ public:
     explicit AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent = nullptr);
     ~AIWorkerPage();
 
+    static void EnsureSslCertificatesLoaded();
+
     void setClientModel(ClientModel *clientModel);
     void setWalletModel(WalletModel *walletModel);
 
