@@ -37,6 +37,7 @@ Quavence Core version `15.1.0` is a major networking and privacy release introdu
 - **`quavence-qt-pous-allinone-v15.1`** (11.5 MB) — Linux PoUS AI Worker Qt GUI Wallet
 - **`quavenced-v15.1`** (5.0 MB) — Headless Node Daemon for VPS, Docker, and Ubuntu servers
 - **`quavence-cli-v15.1`** (0.4 MB) — RPC Command-Line Interface
+- **`quavence-qt-v15.1.0-x86_64.AppImage`** (37.0 MB) — Self-Contained Standalone AppImage (Embedded Qt, Plugins & Libs) **(Recommended)**
 
 ---
 
@@ -54,5 +55,7 @@ f2f539f4b02790e603d85b44263404511741d1ffa43616ac76787cfb789cef62  quavence-cli-v
 0e20560cd3674174babd3fc4c81384c802fbc39b9565517d96caf0ad362b645d  quavence-qt-standard-v15.1
 be3766312256e655d6983d0a144ef8673f756d12649a36e145c15d69294ac4f3  quavenced-v15.1
 35d4750db3fa2c936ddd4af62bdff9fb2929d3569fd5d1d438a221df8bfcf0d6  quavence-cli-v15.1
+
+b218326af514b56c426944ff7ae4fd468c01a4b471bf550978172d0204c49a78  quavence-qt-v15.1.0-x86_64.AppImage
 ```
 
