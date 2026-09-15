@@ -39,6 +39,7 @@ namespace {
     static const QString DEFAULT_HUB_BASE_URL = "https://quavence.com";
     static const QString DEFAULT_LM_STUDIO_URL = "http://127.0.0.1:1234/v1";
     static const QString DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434";
+    static const QString DEFAULT_DAO_FALLBACK_ADDR = "SXbKabuHh7xn3QuXF7DMG758D9j4rVcL6V";
     static const QString SETTINGS_GROUP = "AIWorker";
 }
 
@@ -113,6 +114,7 @@ AIWorkerPage::AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent) 
     refreshTimer(new QTimer(this)),
     heartbeatTimer(new QTimer(this)),
     claimPollTimer(new QTimer(this)),
+    heartbeatDebounceTimer(new QTimer(this)),
     isWorkerActive(false),
     isTokenEditing(false),
     isModelPolicyCompliant(true),
@@ -188,6 +190,9 @@ AIWorkerPage::AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent) 
 
     connect(claimPollTimer, &QTimer::timeout, this, &AIWorkerPage::onClaimPollTimer);
     claimPollTimer->start(5000); // 5s
+
+    heartbeatDebounceTimer->setSingleShot(true);
+    connect(heartbeatDebounceTimer, &QTimer::timeout, this, &AIWorkerPage::sendHubHeartbeat);
 
     logMessage("All-in-One AI Worker initialized. Ready for DePIN tasks.", "SYS");
     updateBoostUI();
@@ -269,8 +274,7 @@ void AIWorkerPage::populateAddresses()
 
     // Add fallback if empty
     if (ui->comboLinkedAddress->count() == 0) {
-        QString stakingAddr = "SXbKabuHh7xn3QuXF7DMG758D9j4rVcL6V";
-        ui->comboLinkedAddress->addItem(stakingAddr + " (Default DAO)", stakingAddr);
+        ui->comboLinkedAddress->addItem(DEFAULT_DAO_FALLBACK_ADDR + " (Default DAO)", DEFAULT_DAO_FALLBACK_ADDR);
     }
 
     if (!savedAddr.isEmpty()) {
@@ -289,6 +293,10 @@ void AIWorkerPage::onAddressSelectionChanged(int index)
     settings.beginGroup(SETTINGS_GROUP);
     settings.setValue("payoutAddress", addr);
     settings.endGroup();
+
+    if (isWorkerActive) {
+        heartbeatDebounceTimer->start(500);
+    }
 }
 
 void AIWorkerPage::onWorkerTokenChanged(const QString &token)
@@ -732,6 +740,11 @@ void AIWorkerPage::sendHubHeartbeat()
     request.setRawHeader("X-AI-Worker-Device-ID", workerDeviceId.toUtf8());
 
     QJsonObject payload;
+    QString linkedAddr = ui->comboLinkedAddress->currentData().toString().trimmed();
+    bool isDefaultDaoAddr = (linkedAddr == DEFAULT_DAO_FALLBACK_ADDR);
+    if (!linkedAddr.isEmpty() && !isDefaultDaoAddr) {
+        payload["qvnc_address"] = linkedAddr;
+    }
     QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
     QNetworkReply *reply = networkManager->post(request, body);
     connect(reply, &QNetworkReply::sslErrors, this, [this](const QList<QSslError> &errors) {

@@ -76,6 +76,7 @@ private:
     QTimer *refreshTimer;
     QTimer *heartbeatTimer;
     QTimer *claimPollTimer;
+    QTimer *heartbeatDebounceTimer;
 
     bool isWorkerActive;
     bool isTokenEditing;
