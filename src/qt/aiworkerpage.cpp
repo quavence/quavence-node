@@ -125,7 +125,7 @@ AIWorkerPage::AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent) 
     isTaskRunning(false),
     isRuntimeOnline(false),
     pendingStartAfterProbe(false),
-    preflightStatusMessage(""),
+    preflightStatus(PreflightStatus::Standby),
     currentModelName("qwen/qwen3-vl-8b"),
     workerDeviceId(""),
     attestationCount(0),
@@ -324,23 +324,38 @@ void AIWorkerPage::onToggleWorkerClicked()
     // Preflight check 1: Worker Token
     QString token = getWorkerToken();
     if (token.isEmpty()) {
-        preflightStatusMessage = "TOKEN REQUIRED";
+        preflightStatus = PreflightStatus::TokenRequired;
         updateNodeStatusBadge();
         logMessage("Cannot start worker: Worker Token is empty. Click Edit to enter and save your token.", "WARN");
         return;
     }
 
-    // Preflight check 2: Linked Payout Address
-    if (ui->comboLinkedAddress->count() == 0 || ui->comboLinkedAddress->currentData().toString().trimmed().isEmpty()) {
-        preflightStatusMessage = "ADDRESS REQUIRED";
+    // Preflight check 2: Linked Payout Address (Strict Validation & Fallback Guard)
+    QString linkedAddr = ui->comboLinkedAddress->currentData().toString().trimmed();
+    if (linkedAddr.isEmpty() || linkedAddr == DEFAULT_DAO_FALLBACK_ADDR) {
+        QSettings settings;
+        settings.beginGroup(SETTINGS_GROUP);
+        linkedAddr = settings.value("payoutAddress").toString().trimmed();
+        settings.endGroup();
+    }
+
+    CBitcoinAddress btcAddr(linkedAddr.toStdString());
+    if (linkedAddr.isEmpty() || !btcAddr.IsValid() || linkedAddr == DEFAULT_DAO_FALLBACK_ADDR) {
+        preflightStatus = (linkedAddr.isEmpty()) ? PreflightStatus::AddressRequired : PreflightStatus::InvalidAddress;
         updateNodeStatusBadge();
-        logMessage("Cannot start worker: No linked QVNC address selected for payouts.", "WARN");
+        if (linkedAddr == DEFAULT_DAO_FALLBACK_ADDR) {
+            logMessage("Cannot start worker: Default DAO address cannot be used for receiving worker rewards. Please select a personal payout address.", "WARN");
+        } else if (!btcAddr.IsValid()) {
+            logMessage("Cannot start worker: Linked payout address is invalid (must be a valid QVNC address starting with 'S').", "WARN");
+        } else {
+            logMessage("Cannot start worker: No linked QVNC address selected for payouts.", "WARN");
+        }
         return;
     }
 
     // Preflight check 3: Runtime & Model Ping
     pendingStartAfterProbe = true;
-    preflightStatusMessage = "CHECKING RUNTIME...";
+    preflightStatus = PreflightStatus::CheckingRuntime;
     updateNodeStatusBadge();
     logMessage("Running preflight runtime check at " + getSelectedEndpointUrl() + "...", "SYS");
     onCheckRuntimeConnection();
@@ -535,24 +550,36 @@ void AIWorkerPage::updateBoostUI()
 void AIWorkerPage::updateNodeStatusBadge()
 {
     if (!isWorkerActive) {
-        if (preflightStatusMessage == "TOKEN REQUIRED") {
+        switch (preflightStatus) {
+        case PreflightStatus::TokenRequired:
             ui->labelNodeStatusBadge->setText("⚠️ TOKEN REQUIRED");
             ui->labelNodeStatusBadge->setStyleSheet("background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; border-radius: 4px; padding: 4px 10px; font-weight: 600; font-size: 11px;");
-        } else if (preflightStatusMessage == "ADDRESS REQUIRED") {
+            break;
+        case PreflightStatus::AddressRequired:
             ui->labelNodeStatusBadge->setText("⚠️ ADDRESS REQUIRED");
             ui->labelNodeStatusBadge->setStyleSheet("background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; border-radius: 4px; padding: 4px 10px; font-weight: 600; font-size: 11px;");
-        } else if (preflightStatusMessage == "LM STUDIO OFFLINE") {
+            break;
+        case PreflightStatus::InvalidAddress:
+            ui->labelNodeStatusBadge->setText("⚠️ INVALID ADDRESS");
+            ui->labelNodeStatusBadge->setStyleSheet("background-color: #fef2f2; color: #dc2626; border: 1px solid #fecaca; border-radius: 4px; padding: 4px 10px; font-weight: 600; font-size: 11px;");
+            break;
+        case PreflightStatus::RuntimeOffline:
             ui->labelNodeStatusBadge->setText("⚠️ LM STUDIO OFFLINE");
             ui->labelNodeStatusBadge->setStyleSheet("background-color: #fef2f2; color: #dc2626; border: 1px solid #fecaca; border-radius: 4px; padding: 4px 10px; font-weight: 600; font-size: 11px;");
-        } else if (preflightStatusMessage == "MODEL NOT LOADED") {
+            break;
+        case PreflightStatus::ModelNotLoaded:
             ui->labelNodeStatusBadge->setText("⚠️ MODEL NOT LOADED");
             ui->labelNodeStatusBadge->setStyleSheet("background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; border-radius: 4px; padding: 4px 10px; font-weight: 600; font-size: 11px;");
-        } else if (preflightStatusMessage == "CHECKING RUNTIME...") {
+            break;
+        case PreflightStatus::CheckingRuntime:
             ui->labelNodeStatusBadge->setText("⏳ CHECKING RUNTIME...");
             ui->labelNodeStatusBadge->setStyleSheet("background-color: #eff6ff; color: #2563eb; border: 1px solid #93c5fd; border-radius: 4px; padding: 4px 10px; font-weight: 600; font-size: 11px;");
-        } else {
+            break;
+        case PreflightStatus::Standby:
+        default:
             ui->labelNodeStatusBadge->setText("○ STANDBY");
             ui->labelNodeStatusBadge->setStyleSheet("background-color: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 10px; font-weight: 600; font-size: 11px;");
+            break;
         }
         ui->btnToggleWorker->setText("Start Worker");
         ui->btnToggleWorker->setStyleSheet("background-color: #2563eb; color: #ffffff; border: none; border-radius: 4px; padding: 6px 14px; font-weight: 600; font-size: 12px;");
@@ -637,7 +664,7 @@ void AIWorkerPage::onProbeReplyFinished(QNetworkReply *reply)
         }
 
         if (ui->comboModel->count() == 0) {
-            preflightStatusMessage = "MODEL NOT LOADED";
+            preflightStatus = PreflightStatus::ModelNotLoaded;
             logMessage("Runtime is online, but no models are loaded in memory. Please load an approved model in LM Studio.", "WARN");
             if (pendingStartAfterProbe) {
                 pendingStartAfterProbe = false;
@@ -664,7 +691,7 @@ void AIWorkerPage::onProbeReplyFinished(QNetworkReply *reply)
 
             if (pendingStartAfterProbe) {
                 pendingStartAfterProbe = false;
-                preflightStatusMessage = "";
+                preflightStatus = PreflightStatus::Standby;
                 onToggleWorker(true);
             }
         }
@@ -672,7 +699,7 @@ void AIWorkerPage::onProbeReplyFinished(QNetworkReply *reply)
         isRuntimeOnline = false;
         ui->labelRuntimeStatus->setText("OFFLINE / UNREACHABLE");
         ui->labelRuntimeStatus->setStyleSheet("color: #f87171; font-weight: bold;");
-        preflightStatusMessage = "LM STUDIO OFFLINE";
+        preflightStatus = PreflightStatus::RuntimeOffline;
         logMessage(QString("Runtime check failed (%1): LM Studio is offline or unreachable at %2. Please start LM Studio and enable Local Server.")
             .arg(reply->errorString(), getSelectedEndpointUrl()), "WARN");
 
