@@ -34,6 +34,15 @@ class AIWorkerPage : public QWidget
     Q_OBJECT
 
 public:
+    enum class PreflightStatus {
+        Standby,
+        CheckingRuntime,
+        TokenRequired,
+        AddressRequired,
+        InvalidAddress,
+        RuntimeOffline,
+        ModelNotLoaded
+    };
     explicit AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent = nullptr);
     ~AIWorkerPage();
 
@@ -84,7 +93,7 @@ private:
     bool isTaskRunning;
     bool isRuntimeOnline;
     bool pendingStartAfterProbe;
-    QString preflightStatusMessage;
+    PreflightStatus preflightStatus;
     QString currentModelName;
     QString workerDeviceId;
     int attestationCount;
