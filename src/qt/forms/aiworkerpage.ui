@@ -516,7 +516,7 @@
            <string notr="true">color: #64748b; font-size: 11px; line-height: 1.4;</string>
           </property>
           <property name="text">
-           <string>★ Attestations within the 24h rolling window (1,440 blocks) dynamically boost staking weight (+20% for 1+, +35% for 5+, +50% for 10+ attestations).</string>
+           <string>★ Attestations within the 24h rolling window (1,440 blocks) dynamically boost staking weight (+10% for 1+, +25% for 6+, +50% for 21+ attestations).</string>
           </property>
           <property name="wordWrap">
            <bool>true</bool>
