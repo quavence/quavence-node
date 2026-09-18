@@ -13,6 +13,10 @@
 #include "guiutil.h"
 #include "airegistry.h"
 #include "main.h"
+#include "base58.h"
+#ifdef ENABLE_WALLET
+#include "wallet/wallet.h"
+#endif
 
 #include <QDateTime>
 #include <QClipboard>
@@ -294,6 +298,8 @@ void AIWorkerPage::onAddressSelectionChanged(int index)
     settings.setValue("payoutAddress", addr);
     settings.endGroup();
 
+    updateBoostUI();
+
     if (isWorkerActive) {
         heartbeatDebounceTimer->start(500);
     }
@@ -476,20 +482,48 @@ void AIWorkerPage::updatePoUSStatus()
 
 void AIWorkerPage::updateBoostUI()
 {
-    int onChainCount = 0;
-    int onChainBoost = 0;
+    uint32_t onChainCredits = 0;
     if (chainActive.Tip()) {
-        onChainCount = GetAiAttestationsCountInWindow(chainActive.Height());
-        onChainBoost = GetActiveAiStakeBoost(chainActive.Height());
+        int height = chainActive.Height();
+
+        // 1. Check selected linked address
+        QString linkedAddr = ui->comboLinkedAddress->currentData().toString().trimmed();
+        if (linkedAddr.isEmpty() || linkedAddr == DEFAULT_DAO_FALLBACK_ADDR) {
+            QSettings settings;
+            settings.beginGroup(SETTINGS_GROUP);
+            linkedAddr = settings.value("payoutAddress").toString().trimmed();
+            settings.endGroup();
+        }
+
+        if (!linkedAddr.isEmpty() && linkedAddr != DEFAULT_DAO_FALLBACK_ADDR) {
+            CBitcoinAddress addr(linkedAddr.toStdString());
+            CKeyID keyID;
+            if (addr.IsValid() && addr.GetKeyID(keyID)) {
+                onChainCredits = GetWorkerCreditsInWindow(keyID, height);
+            }
+        }
+
+        // 2. Also check local wallet keys
+#ifdef ENABLE_WALLET
+        if (pwalletMain) {
+            std::set<CKeyID> setKeys;
+            pwalletMain->GetKeys(setKeys);
+            for (std::set<CKeyID>::const_iterator it = setKeys.begin(); it != setKeys.end(); ++it) {
+                uint32_t c = GetWorkerCreditsInWindow(*it, height);
+                if (c > onChainCredits) {
+                    onChainCredits = c;
+                }
+            }
+        }
+#endif
     }
 
-    int effectiveCount = std::max(attestationCount, onChainCount);
-    int effectiveBoost = std::max(currentBoostPercent, onChainBoost);
+    int effectiveCount = std::max(attestationCount, (int)onChainCredits);
+    int effectiveBoost = GetWorkerPoUSBoost((uint32_t)effectiveCount);
 
-    if (effectiveCount >= 10) effectiveBoost = std::max(effectiveBoost, 50);
-    else if (effectiveCount >= 5) effectiveBoost = std::max(effectiveBoost, 35);
-    else if (effectiveCount >= 1) effectiveBoost = std::max(effectiveBoost, 20);
-    else if (isWorkerActive) effectiveBoost = std::max(effectiveBoost, 20);
+    if (effectiveBoost == 0 && isWorkerActive) {
+        effectiveBoost = 20;
+    }
 
     currentBoostPercent = effectiveBoost;
 

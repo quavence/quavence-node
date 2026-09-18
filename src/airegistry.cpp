@@ -289,11 +289,9 @@ int GetWorkerPoUSBoost(uint32_t credits)
 
 int GetActiveAiStakeBoost(int currentHeight)
 {
-    // Global metric for RPC / logging (not used directly in consensus stake validation)
+    // Global metric for RPC / logging (synchronized with consensus boost tiers)
     int q = GetAiAttestationsCountInWindow(currentHeight);
-    if (q < MIN_ATTESTATIONS_FOR_BOOST) return 0;
-    return std::min(MAX_AI_BOOST_PERCENT,
-                    BASE_AI_BOOST_PERCENT + std::min(30, q * 5));
+    return GetWorkerPoUSBoost(q > 0 ? (uint32_t)q : 0);
 }
 
 int GetAiStakeBoost(const CScript& stakeScript, const CBlockIndex* pindexPrev)
