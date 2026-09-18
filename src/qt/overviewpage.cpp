@@ -20,6 +20,7 @@
 #include "transactiontablemodel.h"
 #include "walletmodel.h"
 #include "wallet/wallet.h"
+#include "base58.h"
 
 #include "chainparams.h"
 
@@ -324,6 +325,7 @@ void OverviewPage::updateAiWorkerOverview()
     settings.beginGroup("AIWorker");
     bool isWorkerEnabled = settings.value("workerEnabled", false).toBool();
     QString workerToken = settings.value("workerToken").toString().trimmed();
+    QString payoutAddr = settings.value("payoutAddress").toString().trimmed();
     settings.endGroup();
 
     // 1. On-Chain PoUS Consensus Status (Personal Worker Boost & Network Attestations)
@@ -331,6 +333,18 @@ void OverviewPage::updateAiWorkerOverview()
     int localWorkerBoost = 0;
     if (chainActive.Tip()) {
         int height = chainActive.Height();
+
+        if (!payoutAddr.isEmpty()) {
+            CBitcoinAddress addr(payoutAddr.toStdString());
+            CKeyID keyID;
+            if (addr.IsValid() && addr.GetKeyID(keyID)) {
+                uint32_t c = GetWorkerCreditsInWindow(keyID, height);
+                if (c > localCredits) {
+                    localCredits = c;
+                }
+            }
+        }
+
         if (pwalletMain) {
             std::set<CKeyID> setKeys;
             pwalletMain->GetKeys(setKeys);
@@ -340,25 +354,15 @@ void OverviewPage::updateAiWorkerOverview()
                     localCredits = c;
                 }
             }
-            localWorkerBoost = GetWorkerPoUSBoost(localCredits);
         }
-
-        int onChainBoost = GetActiveAiStakeBoost(height);
-        int onChainAttestations = GetAiAttestationsCountInWindow(height);
-        if (onChainBoost > localWorkerBoost) {
-            localWorkerBoost = onChainBoost;
-        }
-        if (onChainAttestations > (int)localCredits) {
-            localCredits = onChainAttestations;
-        }
+        localWorkerBoost = GetWorkerPoUSBoost(localCredits);
     }
 
     static int s_cachedDoneToday = 0;
     uint32_t effectiveDisplayTasks = std::max((uint32_t)s_cachedDoneToday, localCredits);
 
-    if (localWorkerBoost == 0 && (effectiveDisplayTasks > 0 || isWorkerEnabled)) {
+    if (localWorkerBoost == 0 && isWorkerEnabled) {
         localWorkerBoost = 20;
-        if (effectiveDisplayTasks == 0) effectiveDisplayTasks = 1;
     }
 
     if (localWorkerBoost > 0) {
@@ -427,15 +431,17 @@ void OverviewPage::updateAiWorkerOverview()
 
         s_cachedDoneToday = doneToday;
         int activeTasks = std::max((int)localCredits, doneToday);
-        int activeBoost = localWorkerBoost;
-        if (activeTasks >= 10) activeBoost = std::max(activeBoost, 50);
-        else if (activeTasks >= 5) activeBoost = std::max(activeBoost, 35);
-        else if (activeTasks >= 1) activeBoost = std::max(activeBoost, 20);
-        else if (isWorkerEnabled) activeBoost = std::max(activeBoost, 20);
+        int activeBoost = GetWorkerPoUSBoost((uint32_t)activeTasks);
+        if (activeBoost == 0 && isWorkerEnabled) {
+            activeBoost = 20;
+        }
 
         if (activeBoost > 0) {
             ui->labelAiBoostValue->setText(QString("+%1% (%2 tasks)").arg(activeBoost).arg(activeTasks));
             ui->labelAiBoostValue->setStyleSheet("color: #2563eb; font-weight: bold; font-size: 11px;");
+        } else {
+            ui->labelAiBoostValue->setText("0% (Standby)");
+            ui->labelAiBoostValue->setStyleSheet("color: #64748b; font-weight: 500; font-size: 11px;");
         }
     });
 }
