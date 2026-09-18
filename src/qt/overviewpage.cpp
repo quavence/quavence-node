@@ -361,9 +361,6 @@ void OverviewPage::updateAiWorkerOverview()
     static int s_cachedDoneToday = 0;
     uint32_t effectiveDisplayTasks = std::max((uint32_t)s_cachedDoneToday, localCredits);
 
-    if (localWorkerBoost == 0 && isWorkerEnabled) {
-        localWorkerBoost = 20;
-    }
 
     if (localWorkerBoost > 0) {
         ui->labelAiBoostValue->setText(QString("+%1% (%2 tasks)").arg(localWorkerBoost).arg(effectiveDisplayTasks));
@@ -432,9 +429,6 @@ void OverviewPage::updateAiWorkerOverview()
         s_cachedDoneToday = doneToday;
         int activeTasks = std::max((int)localCredits, doneToday);
         int activeBoost = GetWorkerPoUSBoost((uint32_t)activeTasks);
-        if (activeBoost == 0 && isWorkerEnabled) {
-            activeBoost = 20;
-        }
 
         if (activeBoost > 0) {
             ui->labelAiBoostValue->setText(QString("+%1% (%2 tasks)").arg(activeBoost).arg(activeTasks));
