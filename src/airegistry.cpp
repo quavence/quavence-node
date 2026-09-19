@@ -39,8 +39,13 @@ static bool GetKeyIDFromScript(const CScript& script, CKeyID& out)
 // Extract pubkey from scriptSig (P2PKH format: <sig> <pubkey>)
 // Fully in RAM - zero UTXO lookup required.
 // Works during ConnectBlock and WarmupAiRegistry (even if old UTXOs were already spent).
-static bool TxSpendsFromKeyID(const CTransaction& tx, const CKeyID& authorizedID)
+static bool TxSpendsFromKeyID(const CTransaction& tx, const CKeyID& authorizedID, int nHeight = -1)
 {
+    const Consensus::Params& consensus = Params().GetConsensus();
+    // Gate activation: before nPoUSV2ActivationHeight, use legacy pubkey check.
+    // At or after activation (or for mempool/unspecified height), enforce strict cryptographic verification.
+    bool fEnforceSig = (nHeight < 0 || nHeight >= consensus.nPoUSV2ActivationHeight);
+
     const CScript scriptPubKey = GetScriptForDestination(CTxDestination(authorizedID));
     for (size_t i = 0; i < tx.vin.size(); i++) {
         const CTxIn& txin = tx.vin[i];
@@ -59,7 +64,18 @@ static bool TxSpendsFromKeyID(const CTransaction& tx, const CKeyID& authorizedID
 
         // Hash160(pubkey) == authorizedID ?
         if (pubKey.GetID() == authorizedID) {
-            // Cryptographically verify that txin.scriptSig is a valid signature for this transaction
+            if (!fEnforceSig) {
+                // Legacy v1 consensus rule (prior to activation height)
+                return true;
+            }
+
+            // PoUS v2 consensus rule: Cryptographically verify that txin.scriptSig is a valid signature
+            // for this transaction spending from authorizedID's P2PKH scriptPubKey.
+            //
+            // Note on amount=0: In Quavence's signature hash algorithm (SignatureHash in interpreter.cpp),
+            // amount is not committed in pre-segwit P2PKH sighash serialization (CTransactionSignatureSerializer).
+            // Passing amount=0 is mathematically exact and allows in-memory validation during both ConnectBlock
+            // and historical block replay in WarmupAiRegistry without requiring UTXO database lookups for spent coins.
             TransactionSignatureChecker checker(&tx, (unsigned int)i, 0);
             ScriptError serror = SCRIPT_ERR_OK;
             if (VerifyScript(txin.scriptSig, scriptPubKey, SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_DERSIG | SCRIPT_VERIFY_NULLFAIL, checker, &serror)) {
@@ -67,7 +83,7 @@ static bool TxSpendsFromKeyID(const CTransaction& tx, const CKeyID& authorizedID
             }
         }
     }
-    LogPrint("airegistry", "TxSpendsFromKeyID: no matching P2PKH pubkey found for tx %s\n", tx.GetHash().ToString());
+    LogPrint("airegistry", "TxSpendsFromKeyID: no matching P2PKH authorization found for tx %s (height=%d)\n", tx.GetHash().ToString(), nHeight);
     return false;
 }
 
@@ -171,23 +187,23 @@ bool HasPoUSRewardMarker(const CTransaction& tx)
 
 // ─── Authorization ───────────────────────────────────────────────────────────
 
-bool IsAuthorizedAiHubTx(const CTransaction& tx)
+bool IsAuthorizedAiHubTx(const CTransaction& tx, int nHeight)
 {
     const CKeyID& id = Params().GetConsensus().aiHubKeyID;
     if (id.IsNull()) return false;
-    return TxSpendsFromKeyID(tx, id);
+    return TxSpendsFromKeyID(tx, id, nHeight);
 }
 
-bool IsAuthorizedAiPoolTx(const CTransaction& tx)
+bool IsAuthorizedAiPoolTx(const CTransaction& tx, int nHeight)
 {
     const CKeyID& id = Params().GetConsensus().aiPoolKeyID;
     if (id.IsNull()) return false;
-    return TxSpendsFromKeyID(tx, id);
+    return TxSpendsFromKeyID(tx, id, nHeight);
 }
 
-bool IsValidAiAttestationTx(const CTransaction& tx)
+bool IsValidAiAttestationTx(const CTransaction& tx, int nHeight)
 {
-    if (!IsAuthorizedAiHubTx(tx)) return false;
+    if (!IsAuthorizedAiHubTx(tx, nHeight)) return false;
     for (size_t i = 0; i < tx.vout.size(); i++) {
         AiAttestationRecord rec;
         if (ExtractAiAttestation(tx.vout[i], rec)) return true;
@@ -195,9 +211,9 @@ bool IsValidAiAttestationTx(const CTransaction& tx)
     return false;
 }
 
-bool IsValidPoUSRewardTx(const CTransaction& tx)
+bool IsValidPoUSRewardTx(const CTransaction& tx, int nHeight)
 {
-    return IsAuthorizedAiPoolTx(tx) && HasPoUSRewardMarker(tx);
+    return IsAuthorizedAiPoolTx(tx, nHeight) && HasPoUSRewardMarker(tx);
 }
 
 // ─── Registry lifecycle ──────────────────────────────────────────────────────
@@ -210,7 +226,7 @@ void RegisterAiAttestationsInBlock(const CBlock& block, int nHeight, int64_t nTi
     std::vector<AiAttestationRecord> atts;
     for (size_t i = 0; i < block.vtx.size(); i++) {
         const CTransaction& tx = block.vtx[i];
-        if (!IsValidAiAttestationTx(tx)) continue;
+        if (!IsValidAiAttestationTx(tx, nHeight)) continue;
         for (size_t j = 0; j < tx.vout.size(); j++) {
             AiAttestationRecord rec;
             if (ExtractAiAttestation(tx.vout[j], rec)) {
@@ -229,7 +245,7 @@ void RegisterAiAttestationsInBlock(const CBlock& block, int nHeight, int64_t nTi
     std::map<CKeyID, uint32_t> credits;
     for (size_t i = 0; i < block.vtx.size(); i++) {
         const CTransaction& tx = block.vtx[i];
-        if (!IsValidPoUSRewardTx(tx)) continue;
+        if (!IsValidPoUSRewardTx(tx, nHeight)) continue;
         for (size_t j = 0; j < tx.vout.size(); j++) {
             const CTxOut& vout = tx.vout[j];
             if (!vout.scriptPubKey.empty() && vout.scriptPubKey[0] == OP_RETURN)
@@ -339,7 +355,7 @@ void WarmupAiRegistry(const CChainParams& chainparams)
         std::vector<AiAttestationRecord> atts;
         for (size_t i = 0; i < block.vtx.size(); i++) {
             const CTransaction& tx = block.vtx[i];
-            if (!IsValidAiAttestationTx(tx)) continue;
+            if (!IsValidAiAttestationTx(tx, h)) continue;
             for (size_t j = 0; j < tx.vout.size(); j++) {
                 AiAttestationRecord rec;
                 if (ExtractAiAttestation(tx.vout[j], rec)) {
@@ -356,7 +372,7 @@ void WarmupAiRegistry(const CChainParams& chainparams)
         std::map<CKeyID, uint32_t> credits;
         for (size_t i = 0; i < block.vtx.size(); i++) {
             const CTransaction& tx = block.vtx[i];
-            if (!IsValidPoUSRewardTx(tx)) continue;
+            if (!IsValidPoUSRewardTx(tx, h)) continue;
             for (size_t j = 0; j < tx.vout.size(); j++) {
                 const CTxOut& vout = tx.vout[j];
                 if (!vout.scriptPubKey.empty() && vout.scriptPubKey[0] == OP_RETURN) continue;

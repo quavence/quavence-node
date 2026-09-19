@@ -72,6 +72,7 @@ BITCOIN_TESTS =\
   test/netbase_tests.cpp \
   test/pmt_tests.cpp \
   test/policyestimator_tests.cpp \
+  test/pous_auth_bypass_tests.cpp \
   test/pow_tests.cpp \
   test/prevector_tests.cpp \
   test/reverselock_tests.cpp \
