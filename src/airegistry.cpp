@@ -8,6 +8,7 @@
 #include "chainparams.h"
 #include "script/script.h"
 #include "script/standard.h"
+#include "script/interpreter.h"
 #include "base58.h"
 #include "pubkey.h"
 #include <algorithm>
@@ -40,6 +41,7 @@ static bool GetKeyIDFromScript(const CScript& script, CKeyID& out)
 // Works during ConnectBlock and WarmupAiRegistry (even if old UTXOs were already spent).
 static bool TxSpendsFromKeyID(const CTransaction& tx, const CKeyID& authorizedID)
 {
+    const CScript scriptPubKey = GetScriptForDestination(CTxDestination(authorizedID));
     for (size_t i = 0; i < tx.vin.size(); i++) {
         const CTxIn& txin = tx.vin[i];
         CScript::const_iterator pc = txin.scriptSig.begin();
@@ -56,8 +58,14 @@ static bool TxSpendsFromKeyID(const CTransaction& tx, const CKeyID& authorizedID
         if (!pubKey.IsValid()) continue;
 
         // Hash160(pubkey) == authorizedID ?
-        if (pubKey.GetID() == authorizedID)
-            return true;
+        if (pubKey.GetID() == authorizedID) {
+            // Cryptographically verify that txin.scriptSig is a valid signature for this transaction
+            TransactionSignatureChecker checker(&tx, (unsigned int)i, 0);
+            ScriptError serror = SCRIPT_ERR_OK;
+            if (VerifyScript(txin.scriptSig, scriptPubKey, SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_DERSIG | SCRIPT_VERIFY_NULLFAIL, checker, &serror)) {
+                return true;
+            }
+        }
     }
     LogPrint("airegistry", "TxSpendsFromKeyID: no matching P2PKH pubkey found for tx %s\n", tx.GetHash().ToString());
     return false;

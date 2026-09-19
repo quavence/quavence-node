@@ -45,6 +45,15 @@ void CNetAddr::Init()
     vchTorV3.clear();
 }
 
+void CNetAddr::InitIpFromTorV3()
+{
+    if (vchTorV3.size() == 32) {
+        memcpy(ip, pchOnionCat, sizeof(pchOnionCat));
+        uint256 hash = Hash(vchTorV3.begin(), vchTorV3.end());
+        memcpy(ip + sizeof(pchOnionCat), hash.begin(), 16 - sizeof(pchOnionCat));
+    }
+}
+
 void CNetAddr::SetIP(const CNetAddr& ipIn)
 {
     memcpy(ip, ipIn.ip, sizeof(ip));
@@ -81,10 +90,7 @@ bool CNetAddr::SetSpecial(const std::string &strName)
             if (memcmp(vchAddr.data() + 32, calc_checksum, torv3::CHECKSUM_LEN) != 0)
                 return false;
             vchTorV3.assign(vchAddr.begin(), vchAddr.begin() + 32);
-            // Populate ip[16] with OnionCat prefix + SHA256(pubkey)[:10] for legacy compatibility
-            memcpy(ip, pchOnionCat, sizeof(pchOnionCat));
-            uint256 hash = Hash(vchTorV3.begin(), vchTorV3.end());
-            memcpy(ip + sizeof(pchOnionCat), hash.begin(), 16 - sizeof(pchOnionCat));
+            InitIpFromTorV3();
             return true;
         }
 
