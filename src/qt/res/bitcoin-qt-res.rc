@@ -1,5 +1,5 @@
 #define IDR_TOR_EXE 1001
-IDR_TOR_EXE RCDATA "tor/tor.exe"
+// IDR_TOR_EXE RCDATA "tor/tor.exe"
 
 IDI_ICON1 ICON DISCARDABLE "icons/bitcoin.ico"
 IDI_ICON2 ICON DISCARDABLE "icons/bitcoin_testnet.ico"
