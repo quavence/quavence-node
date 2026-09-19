@@ -64,10 +64,10 @@ bool GetTxGlyphCarrier(const CTransaction& tx, unsigned int nOut, GlyphCarrierRe
 
 // ─── Authorization ───────────────────────────────────────────────────────────
 
-bool IsAuthorizedAiHubTx(const CTransaction& tx);
-bool IsAuthorizedAiPoolTx(const CTransaction& tx);
-bool IsValidAiAttestationTx(const CTransaction& tx);
-bool IsValidPoUSRewardTx(const CTransaction& tx);
+bool IsAuthorizedAiHubTx(const CTransaction& tx, int nHeight = -1);
+bool IsAuthorizedAiPoolTx(const CTransaction& tx, int nHeight = -1);
+bool IsValidAiAttestationTx(const CTransaction& tx, int nHeight = -1);
+bool IsValidPoUSRewardTx(const CTransaction& tx, int nHeight = -1);
 
 // ─── Registry lifecycle ──────────────────────────────────────────────────────
 
