@@ -3,6 +3,10 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "netbase.h"
+#include "protocol.h"
+#include "streams.h"
+#include "version.h"
+#include "clientversion.h"
 #include "test/test_bitcoin.h"
 
 #include <string>
@@ -119,6 +123,35 @@ BOOST_AUTO_TEST_CASE(onioncat_test)
     BOOST_CHECK(addr1.ToStringIP() == "5wyqrzbvrdsumnok.onion");
     BOOST_CHECK(addr1.IsRoutable());
 
+}
+
+BOOST_AUTO_TEST_CASE(torv3_address_lost_on_p2p_serialization)
+{
+    std::string seed = "kalwfcd7ia3gcwksq7yipu3b2lseibic6ytmawkbvq7odlleic6lifqd.onion";
+    CNetAddr a;
+    BOOST_CHECK(a.SetSpecial(seed));
+    BOOST_CHECK(a.IsTorV3());
+
+    // P2P wire round-trip
+    CAddress addr(CService(a, 27714), NODE_NETWORK);
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << addr;
+    CAddress back;
+    ss >> back;
+    BOOST_CHECK(back.IsTorV3());
+    BOOST_CHECK_EQUAL(back.ToStringIP(), seed);
+    BOOST_CHECK(back == addr);
+    BOOST_CHECK_EQUAL(back.GetPort(), 27714);
+
+    // Disk / peers.dat round-trip
+    CDataStream ssDisk(SER_DISK, CLIENT_VERSION);
+    ssDisk << addr;
+    CAddress backDisk;
+    ssDisk >> backDisk;
+    BOOST_CHECK(backDisk.IsTorV3());
+    BOOST_CHECK_EQUAL(backDisk.ToStringIP(), seed);
+    BOOST_CHECK(backDisk == addr);
+    BOOST_CHECK_EQUAL(backDisk.GetPort(), 27714);
 }
 
 BOOST_AUTO_TEST_CASE(subnet_test)

@@ -65,6 +65,7 @@ class CNetAddr
         bool IsTor() const;
         bool IsTorV3() const { return vchTorV3.size() == 32; }
         const std::vector<unsigned char>& GetTorV3() const { return vchTorV3; }
+        void InitIpFromTorV3();
         bool IsLocal() const;
         bool IsRoutable() const;
         bool IsValid() const;
@@ -89,7 +90,23 @@ class CNetAddr
 
         template <typename Stream, typename Operation>
         inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-            READWRITE(FLATDATA(ip));
+            uint8_t netType = IsTorV3() ? 4 : 1;
+            READWRITE(netType);
+            if (ser_action.ForRead() && netType == 4) {
+                vchTorV3.resize(32);
+            }
+            if (netType == 4) {
+                READWRITE(REF(CFlatData((char*)vchTorV3.data(), (char*)vchTorV3.data() + 32)));
+            } else {
+                READWRITE(FLATDATA(ip));
+            }
+            if (ser_action.ForRead()) {
+                if (netType == 4) {
+                    InitIpFromTorV3();
+                } else {
+                    vchTorV3.clear();
+                }
+            }
         }
 
         friend class CSubNet;
@@ -163,7 +180,7 @@ class CService : public CNetAddr
 
         template <typename Stream, typename Operation>
         inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-            READWRITE(FLATDATA(ip));
+            CNetAddr::SerializationOp(s, ser_action, nType, nVersion);
             unsigned short portN = htons(port);
             READWRITE(FLATDATA(portN));
             if (ser_action.ForRead())
