@@ -11,6 +11,7 @@
 #include "netbase.h"
 #include "serialize.h"
 #include "streams.h"
+#include "version.h"
 
 using namespace std;
 
@@ -170,6 +171,49 @@ BOOST_AUTO_TEST_CASE(cnode_simple_test)
     CNode* pnode2 = new CNode(hSocket, addr, pszDest, fInboundIn);
     BOOST_CHECK(pnode2->fInbound == true);
     BOOST_CHECK(pnode2->fFeeler == false);
+}
+
+BOOST_AUTO_TEST_CASE(torv3_address_roundtrip_serialization)
+{
+    const std::string seed = "kalwfcd7ia3gcwksq7yipu3b2lseibic6ytmawkbvq7odlleic6lifqd.onion";
+
+    CNetAddr a;
+    BOOST_REQUIRE(a.SetSpecial(seed));
+    BOOST_CHECK(a.IsTorV3());
+    BOOST_CHECK_EQUAL(a.ToStringIP(), seed);
+
+    CService svc(a, 27714);
+    CAddress addr(svc, NODE_NETWORK);
+
+    CDataStream ss(SER_NETWORK, TORV3_ADDR_VERSION);
+    ss << addr;
+
+    CAddress back;
+    ss >> back;
+
+    BOOST_CHECK(back.IsTorV3());
+    BOOST_CHECK_EQUAL(back.ToStringIP(), seed);
+    BOOST_CHECK(back == addr);
+    BOOST_CHECK_EQUAL(back.GetPort(), 27714);
+}
+
+BOOST_AUTO_TEST_CASE(torv3_legacy_stream_no_crash)
+{
+    const std::string seed = "kalwfcd7ia3gcwksq7yipu3b2lseibic6ytmawkbvq7odlleic6lifqd.onion";
+
+    CNetAddr a;
+    BOOST_REQUIRE(a.SetSpecial(seed));
+
+    CDataStream ss(SER_NETWORK, 70015); // legacy version
+    CService svc(a, 27714);
+    CAddress addr(svc, NODE_NETWORK);
+    ss << addr;
+
+    CAddress back;
+    ss >> back;
+
+    BOOST_CHECK(!back.IsTorV3());
+    BOOST_CHECK(back.IsValid());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
