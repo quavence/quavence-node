@@ -69,6 +69,13 @@ static bool TxSpendsFromKeyID(const CTransaction& tx, const CKeyID& authorizedID
                 return true;
             }
 
+            // Fast size pre-filter (W-DoS mitigation): Canonical P2PKH scriptSig with DER signature
+            // requires at least ~70 bytes DER sig + 33 bytes compressed pubkey (> 100 bytes).
+            // Rejecting undersized scriptSig avoids invoking VerifyScript on malformed/junk inputs.
+            if (txin.scriptSig.size() < 70) {
+                continue;
+            }
+
             // PoUS v2 consensus rule: Cryptographically verify that txin.scriptSig is a valid signature
             // for this transaction spending from authorizedID's P2PKH scriptPubKey.
             //
