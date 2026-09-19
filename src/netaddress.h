@@ -11,6 +11,8 @@
 
 #include "compat.h"
 #include "serialize.h"
+#include "version.h"
+#include <cassert>
 
 #include <stdint.h>
 #include <string>
@@ -90,20 +92,28 @@ class CNetAddr
 
         template <typename Stream, typename Operation>
         inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-            uint8_t netType = IsTorV3() ? 4 : 1;
-            READWRITE(netType);
-            if (ser_action.ForRead() && netType == 4) {
-                vchTorV3.resize(32);
-            }
-            if (netType == 4) {
-                READWRITE(REF(CFlatData((char*)vchTorV3.data(), (char*)vchTorV3.data() + 32)));
+            if (nVersion >= TORV3_ADDR_VERSION) {
+                uint8_t netType = IsTorV3() ? 4 : 1;
+                READWRITE(netType);
+                if (ser_action.ForRead() && netType == 4) {
+                    vchTorV3.assign(32, 0);
+                }
+                if (netType == 4) {
+                    assert(vchTorV3.size() == 32);
+                    READWRITE(REF(CFlatData((char*)vchTorV3.data(), (char*)vchTorV3.data() + 32)));
+                } else {
+                    READWRITE(FLATDATA(ip));
+                }
+                if (ser_action.ForRead()) {
+                    if (netType == 4) {
+                        InitIpFromTorV3();
+                    } else {
+                        vchTorV3.clear();
+                    }
+                }
             } else {
                 READWRITE(FLATDATA(ip));
-            }
-            if (ser_action.ForRead()) {
-                if (netType == 4) {
-                    InitIpFromTorV3();
-                } else {
+                if (ser_action.ForRead()) {
                     vchTorV3.clear();
                 }
             }
