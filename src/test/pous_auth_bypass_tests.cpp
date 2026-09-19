@@ -101,6 +101,19 @@ BOOST_AUTO_TEST_CASE(pous_authorization_bypass_regression_test)
     BOOST_CHECK_MESSAGE(!IsValidPoUSRewardTx(forged, -1),
                         "Mempool / unspecified height MUST reject forged reward marker");
 
+    // Also test full-length (>= 70 bytes) invalid DER signature to verify VerifyScript logic specifically
+    CMutableTransaction forgedLongTx(forgedTx);
+    std::vector<unsigned char> longDummySig(72, 0x01);
+    longDummySig[0] = 0x30; longDummySig[1] = 0x44;
+    CScript longScriptSig;
+    longScriptSig << longDummySig << ToByteVector(poolPubKey) << ToByteVector(redeemScript);
+    forgedLongTx.vin[0].scriptSig = longScriptSig;
+    CTransaction forgedLong(forgedLongTx);
+    BOOST_CHECK_MESSAGE(!IsAuthorizedAiPoolTx(forgedLong, activatedHeight),
+                        "Full-length invalid signature must be rejected by VerifyScript");
+    BOOST_CHECK_MESSAGE(!IsValidPoUSRewardTx(forgedLong, activatedHeight),
+                        "Full-length invalid reward must be rejected by VerifyScript");
+
     // Assertion 7: If forged transaction is processed in a block at activated height,
     // attacker MUST NOT receive any worker credits or stake boost!
     CBlock block;
