@@ -85,6 +85,10 @@ public:
     CScript GetAiWorkerPoolScript() const;
     int GetAiWorkerPoolPercent() const { return nAiWorkerPoolPercent; }
     int GetDevFundActivationHeight() const { return nDevFundActivationHeight; }
+    int GetPoUSV2ActivationHeight() const { return consensus.nPoUSV2ActivationHeight; }
+    void SetPoUSV2ActivationHeight(int nHeight) { consensus.nPoUSV2ActivationHeight = nHeight; }
+    void SetAiPoolKeyID(const CKeyID& id) { consensus.aiPoolKeyID = id; }
+    void SetAiHubKeyID(const CKeyID& id) { consensus.aiHubKeyID = id; }
 protected:
     CChainParams() : nDevFundDonationPercent(0) {}
 

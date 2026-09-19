@@ -84,6 +84,7 @@ struct Params {
     // PoUS: authorized identity keys stored as Hash160 (CKeyID)
     CKeyID aiHubKeyID;
     CKeyID aiPoolKeyID;
+    int nPoUSV2ActivationHeight;
 };
 } // namespace Consensus
 
