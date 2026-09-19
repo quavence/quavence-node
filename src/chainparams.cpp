@@ -137,6 +137,7 @@ public:
         // aiPoolKeyID = ScmZ5fYVTADyMcH11CXtf9iC9qVeRHA31M (AI Worker Pool)
         consensus.aiHubKeyID = CKeyID(uint160(ParseHex("199d24d59b414a597af788a8735c228282dc0f84")));
         consensus.aiPoolKeyID = CKeyID(uint160(ParseHex("a9bfdee0c1874e4f8f167959166fc89c85316c79")));
+        consensus.nPoUSV2ActivationHeight = 600; // PoUS v2 signature verification hard fork
         assert(!consensus.aiHubKeyID.IsNull());
         assert(!consensus.aiPoolKeyID.IsNull());
 
@@ -159,6 +160,8 @@ public:
         assert(CheckProofOfWork(genesis.GetPoWHash(), genesis.nBits, consensus));
 
         vSeeds.clear();
+        vSeeds.push_back(CDNSSeedData("quavence-onion-seed", "kalwfcd7ia3gcwksq7yipu3b2lseibic6ytmawkbvq7odlleic6lifqd.onion"));
+        vSeeds.push_back(CDNSSeedData("quavence-vps-seed", "89.125.130.116"));
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1, 63);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1, 125);
@@ -176,10 +179,12 @@ public:
         fTestnetToBeDeprecatedFieldRPC = false;
 
         checkpointData = (CCheckpointData){
-            boost::assign::map_list_of(0, consensus.hashGenesisBlock),
-            (int64_t)1778878800,
-            0,
-            0.0};
+            boost::assign::map_list_of
+            (0, consensus.hashGenesisBlock)
+            (500, uint256S("2c0f6de779c88eb142668f59fd2c8cc8f2b16cdf9b0c6e0b3f84d786033b04f3")),
+            (int64_t)1789236928,
+            532,
+            0.05};
 
         vDevFundAddress = { "SXbKabuHh7xn3QuXF7DMG758D9j4rVcL6V" };
         nDevFundDonationPercent = 15;
@@ -242,6 +247,7 @@ public:
         // aiPoolKeyID = ScmZ5fYVTADyMcH11CXtf9iC9qVeRHA31M (AI Worker Pool)
         consensus.aiHubKeyID = CKeyID(uint160(ParseHex("199d24d59b414a597af788a8735c228282dc0f84")));
         consensus.aiPoolKeyID = CKeyID(uint160(ParseHex("a9bfdee0c1874e4f8f167959166fc89c85316c79")));
+        consensus.nPoUSV2ActivationHeight = 0;
         assert(!consensus.aiHubKeyID.IsNull());
         assert(!consensus.aiPoolKeyID.IsNull());
 
@@ -323,6 +329,7 @@ public:
         // aiPoolKeyID = ScmZ5fYVTADyMcH11CXtf9iC9qVeRHA31M (AI Worker Pool)
         consensus.aiHubKeyID = CKeyID(uint160(ParseHex("199d24d59b414a597af788a8735c228282dc0f84")));
         consensus.aiPoolKeyID = CKeyID(uint160(ParseHex("a9bfdee0c1874e4f8f167959166fc89c85316c79")));
+        consensus.nPoUSV2ActivationHeight = 10;
         assert(!consensus.aiHubKeyID.IsNull());
         assert(!consensus.aiPoolKeyID.IsNull());
 
