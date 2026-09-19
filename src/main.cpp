@@ -6792,6 +6792,8 @@ bool SendMessages(CNode* pto)
             vAddr.reserve(pto->vAddrToSend.size());
             BOOST_FOREACH(const CAddress& addr, pto->vAddrToSend)
             {
+                if (addr.IsTorV3() && pto->nVersion < TORV3_ADDR_VERSION)
+                    continue;
                 if (!pto->addrKnown.contains(addr.GetKey()))
                 {
                     pto->addrKnown.insert(addr.GetKey());

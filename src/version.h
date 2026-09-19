@@ -9,7 +9,10 @@
  * network protocol versioning
  */
 
-static const int PROTOCOL_VERSION = 70015;
+//! Tor v3 serialized network address format supported starts with this version
+static const int TORV3_ADDR_VERSION = 70016;
+
+static const int PROTOCOL_VERSION = 70016;
 
 //! initial proto version, to be increased after version/verack negotiation
 static const int INIT_PROTO_VERSION = 209;
