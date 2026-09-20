@@ -92,7 +92,9 @@ class CNetAddr
 
         template <typename Stream, typename Operation>
         inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-            if (nVersion >= TORV3_ADDR_VERSION) {
+            bool fNewFormat = (nType & SER_DISK) ? (nVersion >= TORV3_DISK_VERSION)
+                                                 : (nVersion >= TORV3_ADDR_VERSION);
+            if (fNewFormat) {
                 uint8_t netType = IsTorV3() ? 4 : 1;
                 READWRITE(netType);
                 if (ser_action.ForRead() && netType == 4) {
@@ -153,7 +155,8 @@ class CSubNet
 
         template <typename Stream, typename Operation>
         inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-            READWRITE(network);
+            int nNetVersion = (nType & SER_DISK) ? 150101 : 70015;
+            ::SerReadWrite(s, network, nType, nNetVersion, ser_action);
             READWRITE(FLATDATA(netmask));
             READWRITE(FLATDATA(valid));
         }
