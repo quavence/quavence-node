@@ -43,19 +43,18 @@ bool StartEmbeddedTor()
 #ifndef WIN32
     return false;
 #else
-    if (!GetBoolArg("-embeddedtor", true)) {
-        LogPrintf("embedded tor: disabled by -embeddedtor=0\n");
+    // 1. Проверка явного отключения
+    if (GetBoolArg("-notor", false) || !GetBoolArg("-embeddedtor", true)) {
+        LogPrintf("embedded tor: disabled by -notor or -embeddedtor=0\n");
         return false;
     }
 
-    if (mapArgs.count("-proxy") || mapArgs.count("-onion") || GetBoolArg("-notor", false)) {
-        LogPrintf("embedded tor: custom proxy or -notor configured; skipping embedded tor\n");
-        return false;
-    }
-
-    // Check if external Tor Control is already reachable on 9051
-    if (IsPortListening(9051)) {
-        LogPrintf("embedded tor: external Tor detected on 127.0.0.1:9051; using external Tor\n");
+    // 2. Корректный fallback на внешний Tor, если он запущен в системе
+    if (IsPortListening(9051) || IsPortListening(9050)) {
+        LogPrintf("embedded tor: external Tor detected on 127.0.0.1:9051/9050; configuring external Tor proxy\n");
+        // Явно конфигурируем параметры внешнего Tor, чтобы нода не потеряла связь с .onion
+        mapArgs["-onion"] = "127.0.0.1:9050";
+        mapArgs["-torcontrol"] = "127.0.0.1:9051";
         return false;
     }
 
@@ -115,8 +114,8 @@ bool StartEmbeddedTor()
         SetInformationJobObject(hTorJob, JobObjectExtendedLimitInformation, &jeli, sizeof(jeli));
     }
 
-    const int nSocksPort = 27715;
-    const int nControlPort = 27716;
+    const int nSocksPort = 27718;
+    const int nControlPort = 27719;
 
     std::string strArgs = strprintf(
         "\"%s\" --DataDirectory \"%s\" --SocksPort 127.0.0.1:%d --ControlPort 127.0.0.1:%d --CookieAuthentication 1 --Log \"notice stdout\"",
@@ -178,8 +177,10 @@ bool StartEmbeddedTor()
         // Continue anyway; TorController will retry
     }
 
-    SoftSetArg("-onion", strprintf("127.0.0.1:%d", nSocksPort));
-    SoftSetArg("-torcontrol", strprintf("127.0.0.1:%d", nControlPort));
+    mapArgs["-onion"] = strprintf("127.0.0.1:%d", nSocksPort);
+    mapArgs["-torcontrol"] = strprintf("127.0.0.1:%d", nControlPort);
+    mapArgs.erase("-torpassword");
+    mapMultiArgs.erase("-torpassword");
 
     LogPrintf("embedded tor: successfully initialized (onion 127.0.0.1:%d, torcontrol 127.0.0.1:%d)\n",
               nSocksPort, nControlPort);
