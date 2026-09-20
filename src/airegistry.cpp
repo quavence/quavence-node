@@ -72,7 +72,21 @@ static bool TxSpendsFromKeyID(const CTransaction& tx, const CKeyID& authorizedID
             // Fast size pre-filter (W-DoS mitigation): Canonical P2PKH scriptSig with DER signature
             // requires at least ~70 bytes DER sig + 33 bytes compressed pubkey (> 100 bytes).
             // Rejecting undersized scriptSig avoids invoking VerifyScript on malformed/junk inputs.
-            if (txin.scriptSig.size() < 70) {
+            static const size_t MIN_POUS_SCRIPTSIG_SIZE = 70;
+            if (txin.scriptSig.size() < MIN_POUS_SCRIPTSIG_SIZE) {
+                continue;
+            }
+
+            // Enforce SIGHASH_ALL explicitly (NEW-3 defense-in-depth):
+            // The signature must commit to all inputs and outputs without permissive flags (such as ANYONECANPAY).
+            // In canonical P2PKH, the first push is the DER signature ending with the sighash byte.
+            CScript::const_iterator pc = txin.scriptSig.begin();
+            opcodetype opcode;
+            std::vector<unsigned char> vchSig;
+            if (!txin.scriptSig.GetOp(pc, opcode, vchSig) || vchSig.empty()) {
+                continue;
+            }
+            if (vchSig.back() != SIGHASH_ALL) {
                 continue;
             }
 

@@ -11,6 +11,8 @@
 
 #include "compat.h"
 #include "serialize.h"
+#include "version.h"
+#include <cassert>
 
 #include <stdint.h>
 #include <string>
@@ -32,6 +34,7 @@ class CNetAddr
     protected:
         unsigned char ip[16]; // in network byte order
         uint32_t scopeId; // for scoped/link-local ipv6 addresses
+        std::vector<unsigned char> vchTorV3; // 32-byte Ed25519 pubkey for Tor v3
 
     public:
         CNetAddr();
@@ -62,6 +65,9 @@ class CNetAddr
         bool IsRFC6052() const; // IPv6 well-known prefix (64:FF9B::/96)
         bool IsRFC6145() const; // IPv6 IPv4-translated address (::FFFF:0:0:0/96)
         bool IsTor() const;
+        bool IsTorV3() const { return vchTorV3.size() == 32; }
+        const std::vector<unsigned char>& GetTorV3() const { return vchTorV3; }
+        void InitIpFromTorV3();
         bool IsLocal() const;
         bool IsRoutable() const;
         bool IsValid() const;
@@ -86,7 +92,33 @@ class CNetAddr
 
         template <typename Stream, typename Operation>
         inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-            READWRITE(FLATDATA(ip));
+            bool fNewFormat = (nType & SER_DISK) ? (nVersion >= TORV3_DISK_VERSION)
+                                                 : (nVersion >= TORV3_ADDR_VERSION);
+            if (fNewFormat) {
+                uint8_t netType = IsTorV3() ? 4 : 1;
+                READWRITE(netType);
+                if (ser_action.ForRead() && netType == 4) {
+                    vchTorV3.assign(32, 0);
+                }
+                if (netType == 4) {
+                    assert(vchTorV3.size() == 32);
+                    READWRITE(REF(CFlatData((char*)vchTorV3.data(), (char*)vchTorV3.data() + 32)));
+                } else {
+                    READWRITE(FLATDATA(ip));
+                }
+                if (ser_action.ForRead()) {
+                    if (netType == 4) {
+                        InitIpFromTorV3();
+                    } else {
+                        vchTorV3.clear();
+                    }
+                }
+            } else {
+                READWRITE(FLATDATA(ip));
+                if (ser_action.ForRead()) {
+                    vchTorV3.clear();
+                }
+            }
         }
 
         friend class CSubNet;
@@ -123,7 +155,8 @@ class CSubNet
 
         template <typename Stream, typename Operation>
         inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-            READWRITE(network);
+            int nNetVersion = (nType & SER_DISK) ? 150101 : 70015;
+            ::SerReadWrite(s, network, nType, nNetVersion, ser_action);
             READWRITE(FLATDATA(netmask));
             READWRITE(FLATDATA(valid));
         }
@@ -160,7 +193,7 @@ class CService : public CNetAddr
 
         template <typename Stream, typename Operation>
         inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-            READWRITE(FLATDATA(ip));
+            CNetAddr::SerializationOp(s, ser_action, nType, nVersion);
             unsigned short portN = htons(port);
             READWRITE(FLATDATA(portN));
             if (ser_action.ForRead())
