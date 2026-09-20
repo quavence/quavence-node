@@ -281,14 +281,24 @@ static std::map<std::string,std::string> ParseTorReplyMapping(const std::string 
             return std::map<std::string,std::string>();
         ++ptr; // skip '='
         if (ptr < s.size() && s[ptr] == '"') { // Quoted string
-            ++ptr; // skip '='
+            ++ptr; // skip opening '"'
             bool escape_next = false;
-            while (ptr < s.size() && (!escape_next && s[ptr] != '"')) {
-                escape_next = (s[ptr] == '\\');
-                value.push_back(s[ptr]);
-                ++ptr;
+            while (ptr < s.size()) {
+                if (escape_next) {
+                    escape_next = false;
+                    value.push_back(s[ptr]);
+                    ++ptr;
+                } else if (s[ptr] == '\\') {
+                    escape_next = true;
+                    ++ptr;
+                } else if (s[ptr] == '"') {
+                    break;
+                } else {
+                    value.push_back(s[ptr]);
+                    ++ptr;
+                }
             }
-            if (ptr == s.size()) // unexpected end of line
+            if (ptr == s.size() || s[ptr] != '"') // unexpected end of line or missing quote
                 return std::map<std::string,std::string>();
             ++ptr; // skip closing '"'
             /* TODO: unescape value - according to the spec this depends on the
