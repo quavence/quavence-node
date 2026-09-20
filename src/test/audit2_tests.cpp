@@ -306,8 +306,11 @@ BOOST_AUTO_TEST_CASE(live_mainnet_attestation_still_accepted)
 
     // Legacy path (below activation) - this is how the chain was actually built.
     bool legacyOK = IsValidAiAttestationTx(tx, 500);
-    // Enforced path - this is how v15.1.2 revalidates blocks >= 600.
+    // Enforced path - this tests that live mainnet attestations validate under strict v2 rules.
+    int origActivation = p.GetPoUSV2ActivationHeight();
+    p.SetPoUSV2ActivationHeight(600);
     bool enforcedOK = IsValidAiAttestationTx(tx, 4725);
+    p.SetPoUSV2ActivationHeight(origActivation);
 
     BOOST_TEST_MESSAGE(std::string("accepted below activation (h=500)  : ") + (legacyOK ? "YES" : "NO"));
     BOOST_TEST_MESSAGE(std::string("accepted above activation (h=4725) : ") + (enforcedOK ? "YES" : "NO"));
