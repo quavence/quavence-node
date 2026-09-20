@@ -444,6 +444,19 @@ public:
             }
         }
 
+        if (nVersion < 2) {
+            for (std::map<int, CAddrInfo>::iterator it = mapInfo.begin(); it != mapInfo.end(); ++it) {
+                if (it->second.fInTried == false && it->second.nRefCount == 0) {
+                    int nUBucket = it->second.GetNewBucket(nKey);
+                    int nUBucketPos = it->second.GetBucketPosition(nKey, true, nUBucket);
+                    if (vvNew[nUBucket][nUBucketPos] == -1) {
+                        vvNew[nUBucket][nUBucketPos] = it->first;
+                        it->second.nRefCount++;
+                    }
+                }
+            }
+        }
+
         // Prune new entries with refcount 0 (as a result of collisions).
         int nLostUnk = 0;
         for (std::map<int, CAddrInfo>::const_iterator it = mapInfo.begin(); it != mapInfo.end(); ) {

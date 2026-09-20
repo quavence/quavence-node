@@ -137,7 +137,7 @@ public:
         // aiPoolKeyID = ScmZ5fYVTADyMcH11CXtf9iC9qVeRHA31M (AI Worker Pool)
         consensus.aiHubKeyID = CKeyID(uint160(ParseHex("199d24d59b414a597af788a8735c228282dc0f84")));
         consensus.aiPoolKeyID = CKeyID(uint160(ParseHex("a9bfdee0c1874e4f8f167959166fc89c85316c79")));
-        consensus.nPoUSV2ActivationHeight = 600; // PoUS v2 signature verification hard fork
+        consensus.nPoUSV2ActivationHeight = 6500; // PoUS v2 signature verification scheduled activation (NEW-4)
         assert(!consensus.aiHubKeyID.IsNull());
         assert(!consensus.aiPoolKeyID.IsNull());
 
