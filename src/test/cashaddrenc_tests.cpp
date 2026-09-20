@@ -10,6 +10,7 @@
 #include "uint256.h"
 
 #include <boost/test/unit_test.hpp>
+#include <array>
 
 namespace
 {

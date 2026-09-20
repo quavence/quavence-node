@@ -294,12 +294,25 @@ public:
     {
         LOCK(cs);
 
+        // Reconcile nNew and nTried with actual mapInfo contents to guarantee consistency
+        int nRealNew = 0;
+        int nRealTried = 0;
+        for (std::map<int, CAddrInfo>::const_iterator it = mapInfo.begin(); it != mapInfo.end(); it++) {
+            if (it->second.fInTried) {
+                nRealTried++;
+            } else if (it->second.nRefCount) {
+                nRealNew++;
+            }
+        }
+        const_cast<CAddrMan*>(this)->nNew = nRealNew;
+        const_cast<CAddrMan*>(this)->nTried = nRealTried;
+
         unsigned char nVersion = 2;
         s << nVersion;
         s << ((unsigned char)32);
         s << nKey;
-        s << nNew;
-        s << nTried;
+        s << nRealNew;
+        s << nRealTried;
 
         int nUBuckets = ADDRMAN_NEW_BUCKET_COUNT ^ (1 << 30);
         s << nUBuckets;
@@ -308,8 +321,8 @@ public:
         for (std::map<int, CAddrInfo>::const_iterator it = mapInfo.begin(); it != mapInfo.end(); it++) {
             mapUnkIds[(*it).first] = nIds;
             const CAddrInfo &info = (*it).second;
-            if (info.nRefCount) {
-                assert(nIds != nNew); // this means nNew was wrong, oh ow
+            if (info.nRefCount && !info.fInTried) {
+                if (nIds >= nRealNew) break;
                 s << info;
                 nIds++;
             }
@@ -318,7 +331,7 @@ public:
         for (std::map<int, CAddrInfo>::const_iterator it = mapInfo.begin(); it != mapInfo.end(); it++) {
             const CAddrInfo &info = (*it).second;
             if (info.fInTried) {
-                assert(nIds != nTried); // this means nTried was wrong, oh ow
+                if (nIds >= nRealTried) break;
                 s << info;
                 nIds++;
             }
@@ -431,6 +444,19 @@ public:
             }
         }
 
+        if (nVersion < 2) {
+            for (std::map<int, CAddrInfo>::iterator it = mapInfo.begin(); it != mapInfo.end(); ++it) {
+                if (it->second.fInTried == false && it->second.nRefCount == 0) {
+                    int nUBucket = it->second.GetNewBucket(nKey);
+                    int nUBucketPos = it->second.GetBucketPosition(nKey, true, nUBucket);
+                    if (vvNew[nUBucket][nUBucketPos] == -1) {
+                        vvNew[nUBucket][nUBucketPos] = it->first;
+                        it->second.nRefCount++;
+                    }
+                }
+            }
+        }
+
         // Prune new entries with refcount 0 (as a result of collisions).
         int nLostUnk = 0;
         for (std::map<int, CAddrInfo>::const_iterator it = mapInfo.begin(); it != mapInfo.end(); ) {
@@ -445,6 +471,19 @@ public:
         if (nLost + nLostUnk > 0) {
             LogPrint("addrman", "addrman lost %i new and %i tried addresses due to collisions\n", nLostUnk, nLost);
         }
+
+        // Reconcile nNew and nTried with actual entries to prevent desync
+        int nActualNew = 0;
+        int nActualTried = 0;
+        for (std::map<int, CAddrInfo>::const_iterator it = mapInfo.begin(); it != mapInfo.end(); it++) {
+            if (it->second.fInTried) {
+                nActualTried++;
+            } else if (it->second.nRefCount > 0) {
+                nActualNew++;
+            }
+        }
+        nNew = nActualNew;
+        nTried = nActualTried;
 
         Check();
     }
