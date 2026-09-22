@@ -288,6 +288,17 @@ CAmount GetProofOfWorkSubsidy();
 CAmount GetProofOfStakeSubsidy(int nHeight);
 
 /**
+ * A4-5: Verify that coinstake transaction contains required DevFund and AiPool outputs.
+ * Active from Params().GetDevFundActivationHeight().
+ */
+bool CheckCoinstakeSplitOutputs(
+    const CTransaction& coinstake,
+    int nHeight,
+    CAmount nFees,
+    CValidationState& state,
+    const CChainParams& chainparams);
+
+/**
  * Prune block and undo files (blk???.dat and undo???.dat) so that the disk space used is less than a user-defined target.
  * The user sets the target (in MB) on the command line or in config file.  This will be run on startup and whenever new
  * space is allocated in a block or undo file, staying below the target. Changing back to unpruned requires a reindex

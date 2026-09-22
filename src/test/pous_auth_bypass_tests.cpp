@@ -1,3 +1,4 @@
+#include "arith_uint256.h"
 // Copyright (c) 2026 The Quavence developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
@@ -127,38 +128,40 @@ BOOST_AUTO_TEST_CASE(pous_authorization_bypass_regression_test)
 
     UnregisterAiAttestationsInBlock(block, activatedHeight);
 
-    // Assertion 8: Genuine authorized transaction WITH REAL SIGNATURE succeeds at activated height
-    CMutableTransaction genuineTx;
-    genuineTx.nVersion = 1;
-    genuineTx.vin.resize(1);
-    genuineTx.vin[0].prevout.hash = uint256S("fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210");
-    genuineTx.vin[0].prevout.n = 0;
+    // Assertion 8: Genuine authorized transactions WITH REAL SIGNATURE succeed at activated height.
+    // Under PoUS v2 (PUB-04 mitigation), each reward transaction awards at most 1 credit per worker.
+    // 51 legitimate reward transactions award 51 credits, achieving the top boost tier (+50%).
+    CBlock genuineBlock;
+    CScript poolP2PKH = GetScriptForDestination(poolKeyID);
 
     for (int i = 0; i < 51; ++i) {
+        CMutableTransaction genuineTx;
+        genuineTx.nVersion = 1;
+        genuineTx.vin.resize(1);
+        genuineTx.vin[0].prevout.hash = ArithToUint256(arith_uint256(0xfedcba98) + i);
+        genuineTx.vin[0].prevout.n = 0;
         genuineTx.vout.push_back(CTxOut(1000 * COIN, attackerStakeScript));
+        genuineTx.vout.push_back(CTxOut(0, markerScript));
+
+        uint256 hash = SignatureHash(poolP2PKH, genuineTx, 0, SIGHASH_ALL, 0, NULL);
+        std::vector<unsigned char> genuineSig;
+        BOOST_CHECK(poolKey.Sign(hash, genuineSig));
+        genuineSig.push_back((unsigned char)SIGHASH_ALL);
+
+        CScript genuineScriptSig;
+        genuineScriptSig << genuineSig << ToByteVector(poolPubKey);
+        genuineTx.vin[0].scriptSig = genuineScriptSig;
+
+        CTransaction genuine(genuineTx);
+        if (i == 0) {
+            BOOST_CHECK_MESSAGE(IsAuthorizedAiPoolTx(genuine, activatedHeight),
+                                "Genuine pool transaction with valid signature MUST be authorized");
+            BOOST_CHECK_MESSAGE(IsValidPoUSRewardTx(genuine, activatedHeight),
+                                "Genuine pool reward with valid signature MUST be valid");
+        }
+        genuineBlock.vtx.push_back(genuine);
     }
-    genuineTx.vout.push_back(CTxOut(0, markerScript));
 
-    // Sign input 0 with the genuine pool authority private key
-    CScript poolP2PKH = GetScriptForDestination(poolKeyID);
-    uint256 hash = SignatureHash(poolP2PKH, genuineTx, 0, SIGHASH_ALL, 0, NULL);
-    std::vector<unsigned char> genuineSig;
-    BOOST_CHECK(poolKey.Sign(hash, genuineSig));
-    genuineSig.push_back((unsigned char)SIGHASH_ALL);
-
-    CScript genuineScriptSig;
-    genuineScriptSig << genuineSig << ToByteVector(poolPubKey);
-    genuineTx.vin[0].scriptSig = genuineScriptSig;
-
-    CTransaction genuine(genuineTx);
-
-    BOOST_CHECK_MESSAGE(IsAuthorizedAiPoolTx(genuine, activatedHeight),
-                        "Genuine pool transaction with valid signature MUST be authorized");
-    BOOST_CHECK_MESSAGE(IsValidPoUSRewardTx(genuine, activatedHeight),
-                        "Genuine pool reward with valid signature MUST be valid");
-
-    CBlock genuineBlock;
-    genuineBlock.vtx.push_back(genuine);
     RegisterAiAttestationsInBlock(genuineBlock, activatedHeight, 1789230000);
 
     int genuineWorkerBoost = GetAiStakeBoost(attackerStakeScript, &indexPrev);
