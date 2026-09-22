@@ -332,10 +332,7 @@ bool operator==(const CNetAddr& a, const CNetAddr& b)
     if (memcmp(a.ip, b.ip, 16) != 0) {
         return false;
     }
-    if (a.IsTorV3() && b.IsTorV3()) {
-        return a.vchTorV3 == b.vchTorV3;
-    }
-    return true;
+    return a.vchTorV3 == b.vchTorV3;
 }
 
 bool operator!=(const CNetAddr& a, const CNetAddr& b)
@@ -349,10 +346,7 @@ bool operator<(const CNetAddr& a, const CNetAddr& b)
     if (cmp != 0) {
         return cmp < 0;
     }
-    if (a.IsTorV3() && b.IsTorV3()) {
-        return a.vchTorV3 < b.vchTorV3;
-    }
-    return false;
+    return a.vchTorV3 < b.vchTorV3;
 }
 
 bool CNetAddr::GetInAddr(struct in_addr* pipv4Addr) const
@@ -724,6 +718,8 @@ bool CSubNet::Match(const CNetAddr &addr) const
     for(int x=0; x<16; ++x)
         if ((addr.ip[x] & netmask[x]) != network.ip[x])
             return false;
+    if (network.IsTorV3() || addr.IsTorV3())
+        return network.vchTorV3 == addr.vchTorV3;
     return true;
 }
 

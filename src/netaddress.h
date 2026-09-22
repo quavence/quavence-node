@@ -159,6 +159,18 @@ class CSubNet
             ::SerReadWrite(s, network, nType, nNetVersion, ser_action);
             READWRITE(FLATDATA(netmask));
             READWRITE(FLATDATA(valid));
+            if (ser_action.ForRead()) {
+                if (network.IsTor() && s.size() >= 32) {
+                    network.vchTorV3.assign(32, 0);
+                    READWRITE(REF(CFlatData((char*)network.vchTorV3.data(), (char*)network.vchTorV3.data() + 32)));
+                    network.InitIpFromTorV3();
+                }
+            } else {
+                if (network.IsTorV3()) {
+                    assert(network.vchTorV3.size() == 32);
+                    READWRITE(REF(CFlatData((char*)network.vchTorV3.data(), (char*)network.vchTorV3.data() + 32)));
+                }
+            }
         }
 };
 
