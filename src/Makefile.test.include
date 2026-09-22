@@ -74,6 +74,7 @@ BITCOIN_TESTS =\
   test/policyestimator_tests.cpp \
   test/audit2_tests.cpp \
   test/audit3_tests.cpp \
+  test/audit4_node_tests.cpp 
   test/pow_tests.cpp \
   test/prevector_tests.cpp \
   test/reverselock_tests.cpp \

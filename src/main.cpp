@@ -1797,6 +1797,95 @@ CAmount GetProofOfStakeSubsidy(int nHeight)
     return 0;
 }
 
+/**
+ * A4-5: Verify that coinstake transaction contains required DevFund and AiPool outputs.
+ * Active from Params().GetDevFundActivationHeight().
+ * Returns false and sets state if the split is missing or incorrect.
+ */
+bool CheckCoinstakeSplitOutputs(
+    const CTransaction& coinstake,
+    int nHeight,
+    CAmount nFees,
+    CValidationState& state,
+    const CChainParams& chainparams)
+{
+    // Only enforce from activation height
+    if (nHeight < chainparams.GetDevFundActivationHeight())
+        return true;
+
+    // Only enforce if DevFund is configured
+    if (chainparams.GetDevFundAddress().empty())
+        return true;
+
+    const int nDonationPercent = chainparams.DevFundDonationPercent();
+    if (nDonationPercent <= 0)
+        return true;
+
+    // Calculate expected amounts (mirror wallet.cpp CreateCoinStake logic)
+    const CAmount blockSubsidy = GetProofOfStakeSubsidy(nHeight);
+    CAmount nExpectedDevCredit = (blockSubsidy * nDonationPercent) / 100;
+    CAmount nExpectedAiPoolCredit = 0;
+
+    const bool fHasAiPool = !chainparams.GetAiWorkerPoolAddress().empty()
+                            && chainparams.GetAiWorkerPoolPercent() > 0;
+    if (fHasAiPool) {
+        nExpectedAiPoolCredit = (nExpectedDevCredit * chainparams.GetAiWorkerPoolPercent()) / 100;
+        nExpectedDevCredit -= nExpectedAiPoolCredit;
+    }
+
+    // Expected scripts
+    const CScript expectedDevScript    = chainparams.GetDevRewardScript();
+    const CScript expectedAiPoolScript = fHasAiPool ? chainparams.GetAiWorkerPoolScript() : CScript();
+
+    // If expected script cannot be decoded, skip enforcement to avoid false rejection
+    if (expectedDevScript.empty())
+        return true;
+
+    // Tolerance: +-1 satoshi for integer division rounding
+    const CAmount tolerance = 1;
+
+    // Find DevFund and AiPool outputs
+    bool foundDev = false;
+    bool foundAiPool = !fHasAiPool; // if no AiPool configured, treat as found
+
+    for (size_t j = 0; j < coinstake.vout.size(); ++j) {
+        const CTxOut& vout = coinstake.vout[j];
+        if (!expectedDevScript.empty() && vout.scriptPubKey == expectedDevScript) {
+            if (std::abs((int64_t)(vout.nValue - nExpectedDevCredit)) > tolerance) {
+                return state.DoS(100,
+                    error("CheckCoinstakeSplitOutputs(): DevFund output amount mismatch "
+                          "(actual=%d, expected=%d) at height=%d",
+                          vout.nValue, nExpectedDevCredit, nHeight),
+                    REJECT_INVALID, "bad-cs-devfund-amount");
+            }
+            foundDev = true;
+        }
+        if (fHasAiPool && !expectedAiPoolScript.empty() && vout.scriptPubKey == expectedAiPoolScript) {
+            if (std::abs((int64_t)(vout.nValue - nExpectedAiPoolCredit)) > tolerance) {
+                return state.DoS(100,
+                    error("CheckCoinstakeSplitOutputs(): AiPool output amount mismatch "
+                          "(actual=%d, expected=%d) at height=%d",
+                          vout.nValue, nExpectedAiPoolCredit, nHeight),
+                    REJECT_INVALID, "bad-cs-aipool-amount");
+            }
+            foundAiPool = true;
+        }
+    }
+
+    if (!foundDev) {
+        return state.DoS(100,
+            error("CheckCoinstakeSplitOutputs(): Missing DevFund output at height=%d", nHeight),
+            REJECT_INVALID, "bad-cs-no-devfund");
+    }
+    if (!foundAiPool) {
+        return state.DoS(100,
+            error("CheckCoinstakeSplitOutputs(): Missing AiPool output at height=%d", nHeight),
+            REJECT_INVALID, "bad-cs-no-aipool");
+    }
+
+    return true;
+}
+
 bool IsInitialBlockDownload()
 {
     const CChainParams& chainParams = Params();
@@ -2645,6 +2734,14 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                                  error("ConnectBlock(): coinstake pays too much (actual=%d vs limit=%d)",
                                        nActualStakeReward, blockReward),
                                        REJECT_INVALID, "bad-cs-amount");
+    }
+
+    // A4-5: Enforce DevFund and AiPool coinstake split at or above activation height
+    if (block.IsProofOfStake()) {
+        if (block.vtx.size() < 2)
+            return state.DoS(100, error("ConnectBlock(): PoS block missing coinstake"), REJECT_INVALID, "bad-pos-block");
+        if (!CheckCoinstakeSplitOutputs(block.vtx[1], pindex->nHeight, nFees, state, chainparams))
+            return false; // state already set with DoS(100, ...)
     }
 
     // Set proof-of-stake hash modifier
