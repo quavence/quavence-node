@@ -243,6 +243,11 @@ void RegisterAiAttestationsInBlock(const CBlock& block, int nHeight, int64_t nTi
 {
     LOCK(cs_airegistry);
 
+    // A5-2: Unconditionally clear this height slot before re-computing
+    // Ensures idempotency if Register is called without preceding Unregister
+    mapHeightToAttestations.erase(nHeight);
+    mapHeightToWorkerCredits.erase(nHeight);
+
     // Pass 1: QVAI attestations from authorized Hub
     std::vector<AiAttestationRecord> atts;
     for (size_t i = 0; i < block.vtx.size(); i++) {
@@ -362,22 +367,33 @@ int GetAiStakeBoost(const CScript& stakeScript, const CBlockIndex* pindexPrev)
 
 void WarmupAiRegistry(const CChainParams& chainparams)
 {
-    int tipHeight = chainActive.Height();
-    if (tipHeight <= 0) {
-        LogPrintf("AI Registry: chain empty, skipping warmup\n");
-        return;
+    // A5-1: Snapshot block index pointers under cs_main to avoid data race on chainActive
+    std::vector<std::pair<int, CBlockIndex*> > blocksToScan;
+    {
+        LOCK(cs_main);
+        int tipHeight = chainActive.Height();
+        if (tipHeight <= 0) {
+            LogPrintf("AI Registry: chain empty, skipping warmup\n");
+            return;
+        }
+        int startHeight = std::max(1, tipHeight - (AI_ATTESTATION_WINDOW * 2));
+        LogPrintf("AI Registry: warming up from height %d to %d...\n", startHeight, tipHeight);
+        blocksToScan.reserve(tipHeight - startHeight + 1);
+        for (int h = startHeight; h <= tipHeight; h++) {
+            CBlockIndex* pindex = chainActive[h];
+            if (pindex) blocksToScan.push_back(std::make_pair(h, pindex));
+        }
     }
-    int startHeight = std::max(1, tipHeight - (AI_ATTESTATION_WINDOW * 2));
-    LogPrintf("AI Registry: warming up from height %d to %d...\n", startHeight, tipHeight);
+    // cs_main released — disk I/O proceeds without any lock (A4-4 preserved)
 
     // Collect into local structures outside lock to prevent lock starvation during disk I/O (A4-4)
     std::map<int, std::vector<AiAttestationRecord> > tempAttestations;
     std::map<int, std::map<CKeyID, uint32_t> > tempWorkerCredits;
 
     int nAtts = 0, nCredits = 0;
-    for (int h = startHeight; h <= tipHeight; h++) {
-        CBlockIndex* pindex = chainActive[h];
-        if (!pindex) continue;
+    for (size_t idx = 0; idx < blocksToScan.size(); idx++) {
+        int h = blocksToScan[idx].first;
+        CBlockIndex* pindex = blocksToScan[idx].second;
         CBlock block;
         if (!ReadBlockFromDisk(block, pindex, chainparams.GetConsensus())) continue;
         int64_t nTime = pindex->GetBlockTime();
@@ -430,5 +446,5 @@ void WarmupAiRegistry(const CChainParams& chainparams)
     }
 
     LogPrintf("AI Registry: warmup done. Scanned %d blocks, loaded %d attestations, %d worker credits\n",
-              tipHeight - startHeight + 1, nAtts, nCredits);
+              (int)blocksToScan.size(), nAtts, nCredits);
 }
