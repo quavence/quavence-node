@@ -222,7 +222,9 @@ void AdvertiseLocal(CNode *pnode)
         if (addrLocal.IsRoutable())
         {
             LogPrintf("AdvertiseLocal: advertising address %s\n", addrLocal.ToString());
-            pnode->PushAddress(addrLocal);
+            // A4-7: Do not advertise Tor v3 local address to peers that do not support TORV3_ADDR_VERSION
+            if (!addrLocal.IsTorV3() || pnode->nVersion >= TORV3_ADDR_VERSION)
+                pnode->PushAddress(addrLocal);
         }
     }
 }

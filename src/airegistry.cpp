@@ -263,16 +263,22 @@ void RegisterAiAttestationsInBlock(const CBlock& block, int nHeight, int64_t nTi
     if (!atts.empty()) mapHeightToAttestations[nHeight] = atts;
 
     // Pass 2: QVRE reward TX - credits per worker key
+    const bool fPoUSV2 = (nHeight >= 0 && nHeight >= Params().GetConsensus().nPoUSV2ActivationHeight);
     std::map<CKeyID, uint32_t> credits;
     for (size_t i = 0; i < block.vtx.size(); i++) {
         const CTransaction& tx = block.vtx[i];
         if (!IsValidPoUSRewardTx(tx, nHeight)) continue;
+        std::set<CKeyID> rewardedInTx;
         for (size_t j = 0; j < tx.vout.size(); j++) {
             const CTxOut& vout = tx.vout[j];
             if (!vout.scriptPubKey.empty() && vout.scriptPubKey[0] == OP_RETURN)
                 continue; // skip OP_RETURN outputs
+            if (fPoUSV2 && vout.nValue < POUS_MIN_REWARD_OUTPUT_VALUE)
+                continue; // PUB-04 mitigation: minimum dust threshold
             CKeyID workerID;
             if (GetKeyIDFromScript(vout.scriptPubKey, workerID)) {
+                if (fPoUSV2 && !rewardedInTx.insert(workerID).second)
+                    continue; // PUB-04 mitigation: idempotent 1 credit per worker per reward TX
                 credits[workerID]++;
                 LogPrintf("AI Registry: QVRE credit -> %s at height=%d\n",
                           CBitcoinAddress(workerID).ToString(), nHeight);
@@ -356,7 +362,6 @@ int GetAiStakeBoost(const CScript& stakeScript, const CBlockIndex* pindexPrev)
 
 void WarmupAiRegistry(const CChainParams& chainparams)
 {
-    LOCK(cs_airegistry);
     int tipHeight = chainActive.Height();
     if (tipHeight <= 0) {
         LogPrintf("AI Registry: chain empty, skipping warmup\n");
@@ -364,6 +369,10 @@ void WarmupAiRegistry(const CChainParams& chainparams)
     }
     int startHeight = std::max(1, tipHeight - (AI_ATTESTATION_WINDOW * 2));
     LogPrintf("AI Registry: warming up from height %d to %d...\n", startHeight, tipHeight);
+
+    // Collect into local structures outside lock to prevent lock starvation during disk I/O (A4-4)
+    std::map<int, std::vector<AiAttestationRecord> > tempAttestations;
+    std::map<int, std::map<CKeyID, uint32_t> > tempWorkerCredits;
 
     int nAtts = 0, nCredits = 0;
     for (int h = startHeight; h <= tipHeight; h++) {
@@ -388,24 +397,38 @@ void WarmupAiRegistry(const CChainParams& chainparams)
                 }
             }
         }
-        if (!atts.empty()) mapHeightToAttestations[h] = atts;
+        if (!atts.empty()) tempAttestations[h] = atts;
 
+        const bool fPoUSV2 = (h >= 0 && h >= chainparams.GetConsensus().nPoUSV2ActivationHeight);
         std::map<CKeyID, uint32_t> credits;
         for (size_t i = 0; i < block.vtx.size(); i++) {
             const CTransaction& tx = block.vtx[i];
             if (!IsValidPoUSRewardTx(tx, h)) continue;
+            std::set<CKeyID> rewardedInTx;
             for (size_t j = 0; j < tx.vout.size(); j++) {
                 const CTxOut& vout = tx.vout[j];
                 if (!vout.scriptPubKey.empty() && vout.scriptPubKey[0] == OP_RETURN) continue;
+                if (fPoUSV2 && vout.nValue < POUS_MIN_REWARD_OUTPUT_VALUE)
+                    continue; // PUB-04 mitigation: minimum dust threshold
                 CKeyID wid;
                 if (GetKeyIDFromScript(vout.scriptPubKey, wid)) {
+                    if (fPoUSV2 && !rewardedInTx.insert(wid).second)
+                        continue; // PUB-04 mitigation: idempotent 1 credit per worker per reward TX
                     credits[wid]++;
                     nCredits++;
                 }
             }
         }
-        if (!credits.empty()) mapHeightToWorkerCredits[h] = credits;
+        if (!credits.empty()) tempWorkerCredits[h] = credits;
     }
+
+    // Atomic update under lock - zero starvation for concurrent queries
+    {
+        LOCK(cs_airegistry);
+        mapHeightToAttestations.swap(tempAttestations);
+        mapHeightToWorkerCredits.swap(tempWorkerCredits);
+    }
+
     LogPrintf("AI Registry: warmup done. Scanned %d blocks, loaded %d attestations, %d worker credits\n",
               tipHeight - startHeight + 1, nAtts, nCredits);
 }
