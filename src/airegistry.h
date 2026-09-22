@@ -33,6 +33,7 @@ static const unsigned char QVRE_MAGIC[4] = {'Q','V','R','E'};
 // Magic bytes for PoUS Glyph Carrier OP_RETURN
 static const unsigned char GLYPH_MAGIC[4] = {'Q', 'V', 'N', 'C'};
 static const CAmount GLYPH_CARRIER_DUST   = 10000; // 0.00010000 QVNC
+static const CAmount POUS_MIN_REWARD_OUTPUT_VALUE = 1000; // 0.00001000 QVNC (PUB-04 dust defense)
 
 // ─── Structs ─────────────────────────────────────────────────────────────────
 

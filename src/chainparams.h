@@ -89,6 +89,15 @@ public:
     void SetPoUSV2ActivationHeight(int nHeight) { consensus.nPoUSV2ActivationHeight = nHeight; }
     void SetAiPoolKeyID(const CKeyID& id) { consensus.aiPoolKeyID = id; }
     void SetAiHubKeyID(const CKeyID& id) { consensus.aiHubKeyID = id; }
+    void SetDevFundParameters(const std::string& address, unsigned int donationPercent, int activationHeight) {
+        vDevFundAddress = { address };
+        nDevFundDonationPercent = donationPercent;
+        nDevFundActivationHeight = activationHeight;
+    }
+    void SetAiWorkerPoolParameters(const std::string& address, int percent) {
+        vAiWorkerPoolAddress = { address };
+        nAiWorkerPoolPercent = percent;
+    }
 protected:
     CChainParams() : nDevFundDonationPercent(0) {}
 

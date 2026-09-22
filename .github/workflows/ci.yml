@@ -1,0 +1,63 @@
+name: Quavence Core CI & Security Test Suite
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - 'release/**'
+  pull_request:
+    branches:
+      - main
+      - master
+      - 'release/**'
+
+jobs:
+  security-tests:
+    name: Build & Run Consensus Security Tests
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            build-essential libtool autotools-dev automake pkg-config \
+            libssl-dev libevent-dev \
+            libboost-system-dev libboost-filesystem-dev libboost-program-options-dev \
+            libboost-thread-dev libboost-test-dev libboost-chrono-dev libboost-iostreams-dev \
+            libdb-dev libdb++-dev \
+            libminiupnpc-dev \
+            ca-certificates
+
+      - name: Autogen & Configure
+        run: |
+          ./autogen.sh
+          ./configure --with-incompatible-bdb --enable-tests --without-gui
+
+      - name: Compile Test Runner
+        run: |
+          make -C src test/test_blackmore -j$(nproc)
+
+      - name: Run Audit 2 Security Tests (Tor v3 & SIGHASH_ALL)
+        run: |
+          ./src/test/test_blackmore --run_test=audit2_tests --log_level=test_suite
+
+      - name: Run Audit 3 Security Tests (Addrman & DoS)
+        run: |
+          ./src/test/test_blackmore --run_test=audit3_tests --log_level=test_suite
+
+      - name: Run PoUS Authentication Bypass Regression Tests
+        run: |
+          ./src/test/test_blackmore --run_test=pous_auth_bypass_tests --log_level=test_suite
+
+      - name: Run Audit 4 Node Security Tests (PUB-04, Deadlock, Tor v3 Relay)
+        run: |
+          ./src/test/test_blackmore --run_test=audit4_node_tests --log_level=test_suite
+
+      - name: Run Core Crypto & Sanity Tests
+        run: |
+          ./src/test/test_blackmore --run_test=sanity_tests,arith_uint256_tests,crypto_tests
