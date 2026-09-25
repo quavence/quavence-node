@@ -109,6 +109,7 @@ private:
     QString currentTaskId;
     QString currentTaskType;
     QString currentClaimNonce;
+    bool currentTaskIsControl;
     QJsonObject currentTurnInput;
 
     void logMessage(const QString &msg, const QString &level = "INFO");
@@ -128,7 +129,7 @@ private:
     void fetchHubRuntimePolicy();
     void sendHubHeartbeat();
     void pollHubTask();
-    void dispatchTask(const QString &taskId, const QString &taskType, const QString &claimNonce, const QJsonObject &resultJson);
+    void dispatchTask(const QString &taskId, const QString &taskType, const QString &claimNonce, const QJsonObject &resultJson, bool isControl = false);
     void executeInference(const QString &systemPrompt, const QString &userPrompt);
     void submitTaskResult(const QString &taskId, const QString &taskType, const QString &claimNonce, const QJsonObject &result);
 
