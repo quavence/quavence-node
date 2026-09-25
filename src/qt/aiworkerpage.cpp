@@ -133,7 +133,8 @@ AIWorkerPage::AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent) 
     tasksCompletedCount(0),
     hubPolicyVersion("9adf4daa76f246be"),
     hubRequiredGenModel("qwen/qwen3-vl-8b"),
-    hubRequiredEmbedModel("text-embedding-nomic-embed-text-v2-moe")
+    hubRequiredEmbedModel("text-embedding-nomic-embed-text-v2-moe"),
+    currentTaskIsControl(false)
 {
     EnsureSslCertificatesLoaded();
     ui->setupUi(this);
@@ -593,8 +594,13 @@ void AIWorkerPage::updateNodeStatusBadge()
         ui->btnToggleTokenVisibility->setEnabled(true);
     } else {
         if (isTaskRunning) {
-            ui->labelNodeStatusBadge->setText("● RUNNING TASK");
-            ui->labelNodeStatusBadge->setStyleSheet("background-color: #eff6ff; color: #2563eb; border: 1px solid #93c5fd; border-radius: 4px; padding: 4px 10px; font-weight: 600; font-size: 11px;");
+            if (currentTaskIsControl) {
+                ui->labelNodeStatusBadge->setText("● PoUS ATTESTATION");
+                ui->labelNodeStatusBadge->setStyleSheet("background-color: #fef3c7; color: #d97706; border: 1px solid #fcd34d; border-radius: 4px; padding: 4px 10px; font-weight: 600; font-size: 11px;");
+            } else {
+                ui->labelNodeStatusBadge->setText("● RUNNING TASK");
+                ui->labelNodeStatusBadge->setStyleSheet("background-color: #eff6ff; color: #2563eb; border: 1px solid #93c5fd; border-radius: 4px; padding: 4px 10px; font-weight: 600; font-size: 11px;");
+            }
         } else if (isModelPolicyCompliant) {
             ui->labelNodeStatusBadge->setText("● ACTIVE");
             ui->labelNodeStatusBadge->setStyleSheet("background-color: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; border-radius: 4px; padding: 4px 10px; font-weight: 600; font-size: 11px;");
@@ -908,9 +914,15 @@ void AIWorkerPage::onHubClaimReply(QNetworkReply *reply)
                     resultJson = taskObj["result_json"].toObject();
                 }
 
+                bool isControl = taskObj.value("is_control_task").toBool(false);
+
                 if (!taskId.isEmpty()) {
-                    logMessage(QString("★ Claimed task %1 (%2). Dispatching to LM Studio...").arg(taskId, taskType), "TASK");
-                    dispatchTask(taskId, taskType, claimNonce, resultJson);
+                    if (isControl) {
+                        logMessage(QString("★ Claimed PoUS Attestation challenge %1 [control] (GPU verification for 1.5× boost). Dispatching to LM Studio...").arg(taskId), "TASK");
+                    } else {
+                        logMessage(QString("★ Claimed task %1 (%2). Dispatching to LM Studio...").arg(taskId, taskType), "TASK");
+                    }
+                    dispatchTask(taskId, taskType, claimNonce, resultJson, isControl);
                 }
             }
         }
@@ -931,12 +943,13 @@ void AIWorkerPage::onHubClaimReply(QNetworkReply *reply)
 }
 
 void AIWorkerPage::dispatchTask(const QString &taskId, const QString &taskType,
-                                const QString &claimNonce, const QJsonObject &resultJson)
+                                const QString &claimNonce, const QJsonObject &resultJson, bool isControl)
 {
     isTaskRunning = true;
     currentTaskId = taskId;
     currentTaskType = taskType;
     currentClaimNonce = claimNonce;
+    currentTaskIsControl = isControl;
     currentTurnInput = QJsonObject();
     updateNodeStatusBadge();
 
@@ -949,6 +962,7 @@ void AIWorkerPage::dispatchTask(const QString &taskId, const QString &taskType,
     if (userPrompt.isEmpty()) {
         logMessage(QString("Warning: task %1 has no prompt field. Task skipped.").arg(taskId), "AI");
         isTaskRunning = false;
+        currentTaskIsControl = false;
         updateNodeStatusBadge();
         return;
     }
@@ -999,6 +1013,7 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
 {
     if (!reply) {
         isTaskRunning = false;
+        currentTaskIsControl = false;
         updateNodeStatusBadge();
         return;
     }
@@ -1029,11 +1044,13 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
         } else {
             logMessage("Error: Model returned empty response.", "AI");
             isTaskRunning = false;
+            currentTaskIsControl = false;
             updateNodeStatusBadge();
         }
     } else {
         logMessage(QString("Inference call failed: %1").arg(reply->errorString()), "AI");
         isTaskRunning = false;
+        currentTaskIsControl = false;
         updateNodeStatusBadge();
     }
     reply->deleteLater();
@@ -1153,6 +1170,7 @@ void AIWorkerPage::onHubSubmitReply(QNetworkReply *reply)
 {
     if (!reply) {
         isTaskRunning = false;
+        currentTaskIsControl = false;
         updateNodeStatusBadge();
         return;
     }
@@ -1160,7 +1178,11 @@ void AIWorkerPage::onHubSubmitReply(QNetworkReply *reply)
     if (reply->error() == QNetworkReply::NoError) {
         tasksCompletedCount++;
         attestationCount++;
-        logMessage(QString("✓ Task %1 completed and verified on Hub! (Total: %2)").arg(currentTaskId).arg(tasksCompletedCount), "OK");
+        if (currentTaskIsControl) {
+            logMessage(QString("✓ PoUS Attestation %1 verified on Hub! GPU compute confirmed for 1.5× staking boost. (Total: %2)").arg(currentTaskId).arg(tasksCompletedCount), "OK");
+        } else {
+            logMessage(QString("✓ Task %1 completed and verified on Hub! (Total: %2)").arg(currentTaskId).arg(tasksCompletedCount), "OK");
+        }
         updatePoUSStatus();
     } else {
         int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -1169,6 +1191,7 @@ void AIWorkerPage::onHubSubmitReply(QNetworkReply *reply)
     }
 
     isTaskRunning = false;
+    currentTaskIsControl = false;
     currentTaskId = "";
     currentTaskType = "";
     currentClaimNonce = "";
