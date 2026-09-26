@@ -159,17 +159,41 @@ class CSubNet
             ::SerReadWrite(s, network, nType, nNetVersion, ser_action);
             READWRITE(FLATDATA(netmask));
             READWRITE(FLATDATA(valid));
-            if (ser_action.ForRead()) {
-                if (network.IsTor() && s.size() >= 32) {
-                    network.vchTorV3.assign(32, 0);
-                    READWRITE(REF(CFlatData((char*)network.vchTorV3.data(), (char*)network.vchTorV3.data() + 32)));
-                    network.InitIpFromTorV3();
+            // NEW-9 fix: use an explicit hasTorV3 flag so read and write
+            // conditions are identical. IsTor() is true for v2 (OnionCat) but
+            // the key is only present for IsTorV3(), causing v2 subnets to
+            // over-read 32 bytes and desync the entire stream.
+            //
+            // The flag byte is only present in files written by v15.1.4+
+            // (BANLIST_WITH_TORFLAG_VERSION = 150104). Older files have no flag;
+            // CBanDB::Read detects this and lowers the stream version to 150103
+            // before deserializing, so nVersion < BANLIST_WITH_TORFLAG_VERSION
+            // here when reading legacy data.
+            //
+            // Also removed assert() from the serialization path — asserts abort
+            // the node; a corrupt write path should throw, not crash.
+            if (nVersion >= BANLIST_WITH_TORFLAG_VERSION) {
+                if (ser_action.ForRead()) {
+                    uint8_t hasTorV3 = 0;
+                    READWRITE(hasTorV3);
+                    if (hasTorV3) {
+                        network.vchTorV3.assign(32, 0);
+                        READWRITE(REF(CFlatData((char*)network.vchTorV3.data(), (char*)network.vchTorV3.data() + 32)));
+                        network.InitIpFromTorV3();
+                    } else {
+                        network.vchTorV3.clear();
+                    }
+                } else {
+                    uint8_t hasTorV3 = network.IsTorV3() ? 1 : 0;
+                    READWRITE(hasTorV3);
+                    if (hasTorV3) {
+                        READWRITE(REF(CFlatData((char*)network.vchTorV3.data(), (char*)network.vchTorV3.data() + 32)));
+                    }
                 }
             } else {
-                if (network.IsTorV3()) {
-                    assert(network.vchTorV3.size() == 32);
-                    READWRITE(REF(CFlatData((char*)network.vchTorV3.data(), (char*)network.vchTorV3.data() + 32)));
-                }
+                // Legacy path (pre-v15.1.4 file): no flag byte present.
+                // No TorV3 subnets were correctly persisted before this version.
+                network.vchTorV3.clear();
             }
         }
 };

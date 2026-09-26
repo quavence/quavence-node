@@ -917,10 +917,11 @@ void AIWorkerPage::onHubClaimReply(QNetworkReply *reply)
                 bool isControl = taskObj.value("is_control_task").toBool(false);
 
                 if (!taskId.isEmpty()) {
+                    QString providerLabel = ui->comboProvider->currentIndex() == 0 ? "LM Studio" : "Ollama";
                     if (isControl) {
-                        logMessage(QString("★ Claimed PoUS Attestation challenge %1 [control] (GPU verification for 1.5× boost). Dispatching to LM Studio...").arg(taskId), "TASK");
+                        logMessage(QString("★ Claimed PoUS Attestation challenge %1 [control] (GPU verification for 1.5× boost). Dispatching to %2...").arg(taskId, providerLabel), "TASK");
                     } else {
-                        logMessage(QString("★ Claimed task %1 (%2). Dispatching to LM Studio...").arg(taskId, taskType), "TASK");
+                        logMessage(QString("★ Claimed task %1 (%2). Dispatching to %3...").arg(taskId, taskType, providerLabel), "TASK");
                     }
                     dispatchTask(taskId, taskType, claimNonce, resultJson, isControl);
                 }
@@ -1002,6 +1003,13 @@ void AIWorkerPage::executeInference(const QString &systemPrompt, const QString &
     bodyObj["max_tokens"] = 2048;
     bodyObj["stream"] = false;
 
+    // Suppress thinking/CoT tokens for reasoning models (e.g. Qwen3/DeepSeek)
+    // so they do not exhaust max_tokens before producing the result payload.
+    bodyObj["enable_thinking"] = false;
+    QJsonObject kwargs;
+    kwargs["enable_thinking"] = false;
+    bodyObj["chat_template_kwargs"] = kwargs;
+
     QByteArray body = QJsonDocument(bodyObj).toJson(QJsonDocument::Compact);
     QNetworkReply *reply = networkManager->post(request, body);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
@@ -1023,6 +1031,7 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
     if (reply->error() == QNetworkReply::NoError) {
         QJsonDocument doc = QJsonDocument::fromJson(rawData);
         QString outputText = "";
+        QString finishReason = "";
 
         if (doc.isObject()) {
             QJsonObject root = doc.object();
@@ -1030,11 +1039,28 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
                 QJsonArray choices = root["choices"].toArray();
                 if (!choices.isEmpty()) {
                     QJsonObject choice = choices[0].toObject();
+                    finishReason = choice.value("finish_reason").toString();
                     if (choice.contains("message")) {
-                        outputText = choice["message"].toObject()["content"].toString().trimmed();
+                        QJsonObject msg = choice["message"].toObject();
+                        outputText = msg.value("content").toString().trimmed();
+                        // Fallback: If content is empty (e.g. reasoning model in Ollama),
+                        // check reasoning_content or reasoning fields
+                        if (outputText.isEmpty()) {
+                            if (msg.contains("reasoning_content")) {
+                                outputText = msg.value("reasoning_content").toString().trimmed();
+                            } else if (msg.contains("reasoning")) {
+                                outputText = msg.value("reasoning").toString().trimmed();
+                            }
+                        }
                     }
                 }
             }
+        }
+
+        // If outputText contains <think>...</think>, strip the thinking block
+        if (outputText.contains("<think>")) {
+            static QRegularExpression reThink("<think>[\\s\\S]*?</think>", QRegularExpression::CaseInsensitiveOption);
+            outputText = outputText.remove(reThink).trimmed();
         }
 
         if (!outputText.isEmpty()) {
@@ -1042,7 +1068,8 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
             QJsonObject finalResult = parseTaskJsonOutput(outputText, currentTaskType);
             submitTaskResult(currentTaskId, currentTaskType, currentClaimNonce, finalResult);
         } else {
-            logMessage("Error: Model returned empty response.", "AI");
+            QString detail = finishReason.isEmpty() ? "" : QString(" (finish_reason: %1)").arg(finishReason);
+            logMessage(QString("Error: Model returned empty response%1.").arg(detail), "AI");
             isTaskRunning = false;
             currentTaskIsControl = false;
             updateNodeStatusBadge();
