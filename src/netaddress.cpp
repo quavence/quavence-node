@@ -741,6 +741,12 @@ bool CSubNet::Match(const CNetAddr &addr) const
         return false;           // /128 single-host from non-v3 addr — no match
     }
 
+    // Case 3: Subnet is v3, peer is non-v3.
+    //         A Tor v3 ban identifies a specific 32-byte onion key; it must
+    //         never match a non-v3 peer even if the 16-byte IP hash collides.
+    if (network.IsTorV3() && !addr.IsTorV3())
+        return false;
+
     return true;
 }
 

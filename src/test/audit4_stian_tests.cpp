@@ -56,6 +56,10 @@ BOOST_AUTO_TEST_CASE(new6_collision_is_fixed)
     CSubNet banOnSpoof(spoof);
     BOOST_CHECK_MESSAGE(!banOnSpoof.Match(v3),
         "banning the spoof must no longer ban the honest v3 peer");
+
+    CSubNet banOnV3(v3);
+    BOOST_CHECK_MESSAGE(!banOnV3.Match(spoof),
+        "banning the honest v3 peer must no longer ban the spoof/non-v3 address");
 }
 
 // ---------------------------------------------------------------------------
