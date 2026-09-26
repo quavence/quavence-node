@@ -75,6 +75,7 @@ BITCOIN_TESTS =\
   test/audit2_tests.cpp \
   test/audit3_tests.cpp \
   test/audit4_node_tests.cpp \
+  test/audit4_stian_tests.cpp \
   test/pous_auth_bypass_tests.cpp \
   test/pow_tests.cpp \
   test/prevector_tests.cpp \

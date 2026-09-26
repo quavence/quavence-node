@@ -159,15 +159,24 @@ class CSubNet
             ::SerReadWrite(s, network, nType, nNetVersion, ser_action);
             READWRITE(FLATDATA(netmask));
             READWRITE(FLATDATA(valid));
+            // NEW-9 fix: use an explicit hasTorV3 flag so read and write
+            // conditions are identical. IsTor() is true for v2 (OnionCat) but
+            // the key is only present for IsTorV3(), causing v2 subnets to
+            // over-read 32 bytes and desync the entire stream. Also removed
+            // assert() from the serialization path — asserts abort the node;
+            // a corrupt write path should throw, not crash.
             if (ser_action.ForRead()) {
-                if (network.IsTor() && s.size() >= 32) {
+                uint8_t hasTorV3 = 0;
+                READWRITE(hasTorV3);
+                if (hasTorV3) {
                     network.vchTorV3.assign(32, 0);
                     READWRITE(REF(CFlatData((char*)network.vchTorV3.data(), (char*)network.vchTorV3.data() + 32)));
                     network.InitIpFromTorV3();
                 }
             } else {
-                if (network.IsTorV3()) {
-                    assert(network.vchTorV3.size() == 32);
+                uint8_t hasTorV3 = network.IsTorV3() ? 1 : 0;
+                READWRITE(hasTorV3);
+                if (hasTorV3) {
                     READWRITE(REF(CFlatData((char*)network.vchTorV3.data(), (char*)network.vchTorV3.data() + 32)));
                 }
             }

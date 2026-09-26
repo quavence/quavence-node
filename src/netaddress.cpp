@@ -718,8 +718,29 @@ bool CSubNet::Match(const CNetAddr &addr) const
     for(int x=0; x<16; ++x)
         if ((addr.ip[x] & netmask[x]) != network.ip[x])
             return false;
-    if (network.IsTorV3() || addr.IsTorV3())
+
+    // NEW-10 fix (revised): correctly handle Tor v3 matching in all cases.
+    //
+    // Case 1: Both subnet and peer are v3 (single-host v3 ban).
+    //         Require exact 32-byte key equality — the IP bytes alone are not
+    //         sufficient to identify a v3 peer.
+    if (network.IsTorV3() && addr.IsTorV3())
         return network.vchTorV3 == addr.vchTorV3;
+
+    // Case 2: Subnet is non-v3 (v2 or plain IP), peer is v3.
+    //         A /128 single-host ban from a non-v3 address must NOT match a v3
+    //         peer — they have different cryptographic identities even if the 16
+    //         OnionCat IP bytes happen to overlap (the NEW-6 collision attack).
+    //         A range ban (any netmask byte is 0) SHOULD match v3 peers that
+    //         fall within the range, enabling the usual fd87:d87e:eb43::/48
+    //         Tor-block to work.
+    if (!network.IsTorV3() && addr.IsTorV3()) {
+        for (int x = 0; x < 16; ++x)
+            if (netmask[x] != 0xFF)
+                return true;    // range ban — IP-prefix match is sufficient
+        return false;           // /128 single-host from non-v3 addr — no match
+    }
+
     return true;
 }
 
