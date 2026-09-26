@@ -31,6 +31,9 @@ bool CBanDB::Write(const banmap_t& banSet)
     // serialize banlist, checksum data up to that point, then append csum
     CDataStream ssBanlist(SER_DISK, CLIENT_VERSION);
     ssBanlist << FLATDATA(Params().MessageStart());
+    // NEW-9 fix: write a 1-byte format marker so CBanDB::Read can distinguish
+    // new-format files (with hasTorV3 flag in CSubNet) from old ones without it.
+    ssBanlist << (uint8_t)0x02;
     ssBanlist << banSet;
     uint256 hash = Hash(ssBanlist.begin(), ssBanlist.end());
     ssBanlist << hash;
@@ -102,6 +105,27 @@ bool CBanDB::Read(banmap_t& banSet)
         // ... verify the network matches ours
         if (memcmp(pchMsgTmp, Params().MessageStart(), sizeof(pchMsgTmp)))
             return error("%s: Invalid network magic number", __func__);
+
+        // NEW-9 fix: detect banlist format version.
+        // New files (v15.1.4+) have a 0x02 marker byte after the magic.
+        // Old files go directly to the banSet compact-size. We peek at the
+        // next byte: if it is 0x02, consume it and keep CLIENT_VERSION so
+        // CSubNet reads the hasTorV3 flag. Otherwise, lower the stream
+        // version to 150103 (< BANLIST_WITH_TORFLAG_VERSION) so CSubNet
+        // skips the flag and reads legacy 33-byte records correctly.
+        {
+            uint8_t nBanFmt = 0;
+            if (!ssBanlist.empty()) {
+                nBanFmt = *reinterpret_cast<const uint8_t*>(&ssBanlist[0]);
+            }
+            if (nBanFmt == 0x02) {
+                ssBanlist >> nBanFmt;   // consume the marker byte
+                // stream stays at CLIENT_VERSION — hasTorV3 flag will be read
+            } else {
+                // Old format: no marker byte, no hasTorV3 flag.
+                ssBanlist.SetVersion(150103);
+            }
+        }
 
         // de-serialize address data into one CAddrMan object
         ssBanlist >> banSet;

@@ -122,7 +122,7 @@ BOOST_AUTO_TEST_CASE(old_banlist_entry_upgrade)
     old.write((const char*)mask, 16);
     old.write((const char*)&valid, 1);
 
-    CDataStream in(old.begin(), old.end(), SER_DISK, CLIENT_VERSION);
+    CDataStream in(old.begin(), old.end(), SER_DISK, 150103);
     CSubNet sn;
     bool threw = false; std::string what;
     try { in >> sn; } catch (const std::exception& e) { threw = true; what = e.what(); }

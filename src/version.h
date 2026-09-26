@@ -15,6 +15,10 @@ static const int TORV3_ADDR_VERSION = 70016;
 //! Tor v3 disk address format supported starts with this client version (CLIENT_VERSION v15.1.2)
 static const int TORV3_DISK_VERSION = 150102;
 
+//! CSubNet serialization gained an explicit hasTorV3 flag byte starting with this client version.
+//! Files written before this version have no flag byte and must be read with SetVersion(150103).
+static const int BANLIST_WITH_TORFLAG_VERSION = 150104;
+
 static const int PROTOCOL_VERSION = 70016;
 
 //! initial proto version, to be increased after version/verack negotiation
