@@ -69,6 +69,7 @@ private Q_SLOTS:
     void onHubHeartbeatReply(QNetworkReply *reply);
     void onHubClaimReply(QNetworkReply *reply);
     void onInferenceReply(QNetworkReply *reply);
+    void onInferenceReadyRead(QNetworkReply *reply);
     void onHubSubmitReply(QNetworkReply *reply);
 
     void onHeartbeatTimer();
@@ -110,6 +111,15 @@ private:
     QString currentTaskType;
     QString currentClaimNonce;
     bool currentTaskIsControl;
+    bool currentTaskStreamRequested;
+    bool isTaskStreaming;
+    int currentStreamSeq;
+    QString accumulatedStreamText;
+    QByteArray streamReadBuffer;
+    QStringList pendingStreamDeltas;
+    bool isStreamFlushing;
+    bool isStreamFinishing;
+    QString pendingFinishOutputText;
     QJsonObject currentTurnInput;
 
     void logMessage(const QString &msg, const QString &level = "INFO");
@@ -130,7 +140,10 @@ private:
     void sendHubHeartbeat();
     void pollHubTask();
     void dispatchTask(const QString &taskId, const QString &taskType, const QString &claimNonce, const QJsonObject &resultJson, bool isControl = false);
-    void executeInference(const QString &systemPrompt, const QString &userPrompt);
+    void executeInference(const QString &systemPrompt, const QString &userPrompt, const QJsonArray &structuredMessages = QJsonArray());
+    void flushStreamQueue();
+    void finalizeTaskInference(const QString &outputText);
+    void sendStreamChunk(const QString &taskId, const QString &claimNonce, int seq, const QString &delta, const QString &type = "chunk");
     void submitTaskResult(const QString &taskId, const QString &taskType, const QString &claimNonce, const QJsonObject &result);
 
     QJsonObject buildRuntimeAttestation() const;
