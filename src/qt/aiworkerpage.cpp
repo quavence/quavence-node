@@ -134,7 +134,12 @@ AIWorkerPage::AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent) 
     hubPolicyVersion("9adf4daa76f246be"),
     hubRequiredGenModel("qwen/qwen3-vl-8b"),
     hubRequiredEmbedModel("text-embedding-nomic-embed-text-v2-moe"),
-    currentTaskIsControl(false)
+    currentTaskIsControl(false),
+    currentTaskStreamRequested(false),
+    isTaskStreaming(false),
+    currentStreamSeq(1),
+    isStreamFlushing(false),
+    isStreamFinishing(false)
 {
     EnsureSslCertificatesLoaded();
     ui->setupUi(this);
@@ -858,6 +863,7 @@ QJsonObject AIWorkerPage::buildRuntimeAttestation() const
     attestation["detected_generation_model"] = currentModelName.isEmpty() ? hubRequiredGenModel : currentModelName;
     attestation["detected_embedding_model"] = hubRequiredEmbedModel.isEmpty() ? "text-embedding-nomic-embed-text-v2-moe" : hubRequiredEmbedModel;
     attestation["runtime_policy_version"] = hubPolicyVersion.isEmpty() ? "9adf4daa76f246be" : hubPolicyVersion;
+    attestation["streaming"] = true;
     return attestation;
 }
 
@@ -874,6 +880,9 @@ void AIWorkerPage::pollHubTask()
 
     QJsonObject payload;
     payload["runtime_attestation"] = buildRuntimeAttestation();
+    QJsonObject capabilities;
+    capabilities["streaming"] = true;
+    payload["capabilities"] = capabilities;
 
     QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
     QNetworkReply *reply = networkManager->post(request, body);
@@ -952,6 +961,17 @@ void AIWorkerPage::dispatchTask(const QString &taskId, const QString &taskType,
     currentClaimNonce = claimNonce;
     currentTaskIsControl = isControl;
     currentTurnInput = QJsonObject();
+    currentTaskStreamRequested = resultJson.value("stream_requested").toBool(false) ||
+                                resultJson.value("stream").toBool(false) ||
+                                (taskType == "TASK_EXTERNAL_INFERENCE");
+    isTaskStreaming = false;
+    currentStreamSeq = 1;
+    accumulatedStreamText.clear();
+    streamReadBuffer.clear();
+    pendingStreamDeltas.clear();
+    isStreamFlushing = false;
+    isStreamFinishing = false;
+    pendingFinishOutputText.clear();
     updateNodeStatusBadge();
 
     // Hub-First: prompt and system_prompt are pre-assembled by the Hub.
@@ -960,10 +980,16 @@ void AIWorkerPage::dispatchTask(const QString &taskId, const QString &taskType,
         "Return only valid JSON. Do not include markdown fences, comments, or extra text.");
     QString userPrompt = resultJson.value("prompt").toString();
 
-    if (userPrompt.isEmpty()) {
+    QJsonArray structuredMessages;
+    if (resultJson.contains("messages") && resultJson["messages"].isArray() && !resultJson["messages"].toArray().isEmpty()) {
+        structuredMessages = resultJson["messages"].toArray();
+    }
+
+    if (userPrompt.isEmpty() && structuredMessages.isEmpty()) {
         logMessage(QString("Warning: task %1 has no prompt field. Task skipped.").arg(taskId), "AI");
         isTaskRunning = false;
         currentTaskIsControl = false;
+        currentTaskStreamRequested = false;
         updateNodeStatusBadge();
         return;
     }
@@ -973,10 +999,131 @@ void AIWorkerPage::dispatchTask(const QString &taskId, const QString &taskType,
         currentTurnInput = resultJson["turn_input"].toObject();
     }
 
-    executeInference(systemPrompt, userPrompt);
+    executeInference(systemPrompt, userPrompt, structuredMessages);
 }
 
-void AIWorkerPage::executeInference(const QString &systemPrompt, const QString &userPrompt)
+void AIWorkerPage::flushStreamQueue()
+{
+    if (isStreamFlushing) {
+        return;
+    }
+    if (pendingStreamDeltas.isEmpty()) {
+        if (isStreamFinishing) {
+            isStreamFinishing = false;
+            QString textToSubmit = pendingFinishOutputText;
+            pendingFinishOutputText.clear();
+            finalizeTaskInference(textToSubmit);
+        }
+        return;
+    }
+
+    isStreamFlushing = true;
+    QString batchedDelta = pendingStreamDeltas.join("");
+    pendingStreamDeltas.clear();
+    int seq = currentStreamSeq++;
+
+    QString token = getWorkerToken();
+    if (token.isEmpty() || currentTaskId.isEmpty()) {
+        isStreamFlushing = false;
+        return;
+    }
+
+    QUrl url(getHubBaseUrl() + QString("/api/ai/nodes/tasks/%1/stream").arg(currentTaskId));
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setRawHeader("Authorization", QString("Bearer %1").arg(token).toUtf8());
+    request.setRawHeader("X-AI-Worker-Device-ID", workerDeviceId.toUtf8());
+
+    QJsonObject payload;
+    payload["claim_nonce"] = currentClaimNonce;
+    payload["seq"] = seq;
+    payload["delta"] = batchedDelta;
+    payload["type"] = "chunk";
+
+    QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+    QNetworkReply *reply = networkManager->post(request, body);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        isStreamFlushing = false;
+        flushStreamQueue();
+    });
+}
+
+void AIWorkerPage::finalizeTaskInference(const QString &outputText)
+{
+    logMessage(QString("Inference complete for task %1. Signing attestation...").arg(currentTaskId), "AI");
+    QJsonObject finalResult = parseTaskJsonOutput(outputText, currentTaskType);
+    submitTaskResult(currentTaskId, currentTaskType, currentClaimNonce, finalResult);
+}
+
+void AIWorkerPage::sendStreamChunk(const QString &taskId, const QString &claimNonce, int seq, const QString &delta, const QString &type)
+{
+    QString token = getWorkerToken();
+    if (token.isEmpty() || taskId.isEmpty()) return;
+
+    QUrl url(getHubBaseUrl() + QString("/api/ai/nodes/tasks/%1/stream").arg(taskId));
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setRawHeader("Authorization", QString("Bearer %1").arg(token).toUtf8());
+    request.setRawHeader("X-AI-Worker-Device-ID", workerDeviceId.toUtf8());
+
+    QJsonObject payload;
+    payload["claim_nonce"] = claimNonce;
+    payload["seq"] = seq;
+    payload["delta"] = delta;
+    payload["type"] = type;
+
+    QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+    QNetworkReply *reply = networkManager->post(request, body);
+    connect(reply, &QNetworkReply::finished, reply, &QObject::deleteLater);
+}
+
+void AIWorkerPage::onInferenceReadyRead(QNetworkReply *reply)
+{
+    if (!reply) return;
+    streamReadBuffer.append(reply->readAll());
+
+    while (true) {
+        int newlineIdx = streamReadBuffer.indexOf('\n');
+        if (newlineIdx < 0) break;
+
+        QByteArray lineBytes = streamReadBuffer.left(newlineIdx).trimmed();
+        streamReadBuffer.remove(0, newlineIdx + 1);
+
+        if (lineBytes.isEmpty()) continue;
+
+        QString line = QString::fromUtf8(lineBytes);
+        if (line.startsWith("data:")) {
+            QString dataStr = line.mid(5).trimmed();
+            if (dataStr == "[DONE]") continue;
+
+            QJsonDocument chunkDoc = QJsonDocument::fromJson(dataStr.toUtf8());
+            if (chunkDoc.isObject()) {
+                QJsonObject chunkObj = chunkDoc.object();
+                if (chunkObj.contains("choices") && chunkObj["choices"].isArray()) {
+                    QJsonArray choices = chunkObj["choices"].toArray();
+                    if (!choices.isEmpty()) {
+                        QJsonObject choice = choices[0].toObject();
+                        if (choice.contains("delta") && choice["delta"].isObject()) {
+                            QJsonObject deltaObj = choice["delta"].toObject();
+                            QString delta = deltaObj.value("content").toString();
+                            if (delta.isEmpty()) {
+                                delta = deltaObj.value("reasoning_content").toString();
+                            }
+                            if (!delta.isEmpty()) {
+                                accumulatedStreamText += delta;
+                                pendingStreamDeltas.append(delta);
+                                flushStreamQueue();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void AIWorkerPage::executeInference(const QString &systemPrompt, const QString &userPrompt, const QJsonArray &structuredMessages)
 {
     QString baseUrl = getSelectedEndpointUrl();
     QString chatUrl = baseUrl.endsWith("/v1") ? baseUrl + "/chat/completions" : baseUrl + "/v1/chat/completions";
@@ -984,24 +1131,28 @@ void AIWorkerPage::executeInference(const QString &systemPrompt, const QString &
     QNetworkRequest request(chatUrl);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
-    QJsonObject messageSystem;
-    messageSystem["role"] = "system";
-    messageSystem["content"] = systemPrompt;
-
-    QJsonObject messageUser;
-    messageUser["role"] = "user";
-    messageUser["content"] = userPrompt;
-
     QJsonArray messages;
-    messages.append(messageSystem);
-    messages.append(messageUser);
+    if (!structuredMessages.isEmpty()) {
+        messages = structuredMessages;
+    } else {
+        QJsonObject messageSystem;
+        messageSystem["role"] = "system";
+        messageSystem["content"] = systemPrompt;
+
+        QJsonObject messageUser;
+        messageUser["role"] = "user";
+        messageUser["content"] = userPrompt;
+
+        messages.append(messageSystem);
+        messages.append(messageUser);
+    }
 
     QJsonObject bodyObj;
     bodyObj["model"] = currentModelName;
     bodyObj["messages"] = messages;
     bodyObj["temperature"] = 0.2;
     bodyObj["max_tokens"] = 2048;
-    bodyObj["stream"] = false;
+    bodyObj["stream"] = currentTaskStreamRequested;
 
     // Suppress thinking/CoT tokens for reasoning models (e.g. Qwen3/DeepSeek)
     // so they do not exhaust max_tokens before producing the result payload.
@@ -1010,8 +1161,27 @@ void AIWorkerPage::executeInference(const QString &systemPrompt, const QString &
     kwargs["enable_thinking"] = false;
     bodyObj["chat_template_kwargs"] = kwargs;
 
+    if (currentTaskStreamRequested) {
+        isTaskStreaming = true;
+        currentStreamSeq = 1;
+        accumulatedStreamText.clear();
+        streamReadBuffer.clear();
+        pendingStreamDeltas.clear();
+        isStreamFlushing = false;
+        isStreamFinishing = false;
+        pendingFinishOutputText.clear();
+        logMessage(QString("Starting streaming inference for task %1 (relay active)...").arg(currentTaskId), "AI");
+    }
+
     QByteArray body = QJsonDocument(bodyObj).toJson(QJsonDocument::Compact);
     QNetworkReply *reply = networkManager->post(request, body);
+
+    if (currentTaskStreamRequested) {
+        connect(reply, &QNetworkReply::readyRead, this, [this, reply]() {
+            onInferenceReadyRead(reply);
+        });
+    }
+
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         onInferenceReply(reply);
     });
@@ -1022,34 +1192,68 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
     if (!reply) {
         isTaskRunning = false;
         currentTaskIsControl = false;
+        currentTaskStreamRequested = false;
+        isTaskStreaming = false;
         updateNodeStatusBadge();
         return;
     }
 
-    QByteArray rawData = reply->readAll();
-
     if (reply->error() == QNetworkReply::NoError) {
-        QJsonDocument doc = QJsonDocument::fromJson(rawData);
         QString outputText = "";
         QString finishReason = "";
 
-        if (doc.isObject()) {
-            QJsonObject root = doc.object();
-            if (root.contains("choices") && root["choices"].isArray()) {
-                QJsonArray choices = root["choices"].toArray();
-                if (!choices.isEmpty()) {
-                    QJsonObject choice = choices[0].toObject();
-                    finishReason = choice.value("finish_reason").toString();
-                    if (choice.contains("message")) {
-                        QJsonObject msg = choice["message"].toObject();
-                        outputText = msg.value("content").toString().trimmed();
-                        // Fallback: If content is empty (e.g. reasoning model in Ollama),
-                        // check reasoning_content or reasoning fields
-                        if (outputText.isEmpty()) {
-                            if (msg.contains("reasoning_content")) {
-                                outputText = msg.value("reasoning_content").toString().trimmed();
-                            } else if (msg.contains("reasoning")) {
-                                outputText = msg.value("reasoning").toString().trimmed();
+        if (isTaskStreaming) {
+            // Process any trailing bytes remaining in streamReadBuffer
+            if (!streamReadBuffer.isEmpty()) {
+                QString trailing = QString::fromUtf8(streamReadBuffer).trimmed();
+                if (trailing.startsWith("data:")) {
+                    QString dataStr = trailing.mid(5).trimmed();
+                    if (dataStr != "[DONE]") {
+                        QJsonDocument chunkDoc = QJsonDocument::fromJson(dataStr.toUtf8());
+                        if (chunkDoc.isObject()) {
+                            QJsonObject chunkObj = chunkDoc.object();
+                            if (chunkObj.contains("choices") && chunkObj["choices"].isArray()) {
+                                QJsonArray choices = chunkObj["choices"].toArray();
+                                if (!choices.isEmpty()) {
+                                    QJsonObject choice = choices[0].toObject();
+                                    if (choice.contains("delta") && choice["delta"].isObject()) {
+                                        QString delta = choice["delta"].toObject().value("content").toString();
+                                        if (!delta.isEmpty()) {
+                                            accumulatedStreamText += delta;
+                                            pendingStreamDeltas.append(delta);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                streamReadBuffer.clear();
+            }
+
+            outputText = accumulatedStreamText;
+        } else {
+            QByteArray rawData = reply->readAll();
+            QJsonDocument doc = QJsonDocument::fromJson(rawData);
+
+            if (doc.isObject()) {
+                QJsonObject root = doc.object();
+                if (root.contains("choices") && root["choices"].isArray()) {
+                    QJsonArray choices = root["choices"].toArray();
+                    if (!choices.isEmpty()) {
+                        QJsonObject choice = choices[0].toObject();
+                        finishReason = choice.value("finish_reason").toString();
+                        if (choice.contains("message")) {
+                            QJsonObject msg = choice["message"].toObject();
+                            outputText = msg.value("content").toString().trimmed();
+                            // Fallback: If content is empty (e.g. reasoning model in Ollama),
+                            // check reasoning_content or reasoning fields
+                            if (outputText.isEmpty()) {
+                                if (msg.contains("reasoning_content")) {
+                                    outputText = msg.value("reasoning_content").toString().trimmed();
+                                } else if (msg.contains("reasoning")) {
+                                    outputText = msg.value("reasoning").toString().trimmed();
+                                }
                             }
                         }
                     }
@@ -1064,20 +1268,36 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
         }
 
         if (!outputText.isEmpty()) {
-            logMessage(QString("Inference complete for task %1. Signing attestation...").arg(currentTaskId), "AI");
-            QJsonObject finalResult = parseTaskJsonOutput(outputText, currentTaskType);
-            submitTaskResult(currentTaskId, currentTaskType, currentClaimNonce, finalResult);
+            if (isTaskStreaming && (isStreamFlushing || !pendingStreamDeltas.isEmpty())) {
+                isStreamFinishing = true;
+                pendingFinishOutputText = outputText;
+                flushStreamQueue();
+            } else {
+                finalizeTaskInference(outputText);
+            }
         } else {
             QString detail = finishReason.isEmpty() ? "" : QString(" (finish_reason: %1)").arg(finishReason);
             logMessage(QString("Error: Model returned empty response%1.").arg(detail), "AI");
             isTaskRunning = false;
             currentTaskIsControl = false;
+            currentTaskStreamRequested = false;
+            isTaskStreaming = false;
+            isStreamFlushing = false;
+            isStreamFinishing = false;
+            pendingStreamDeltas.clear();
+            pendingFinishOutputText.clear();
             updateNodeStatusBadge();
         }
     } else {
         logMessage(QString("Inference call failed: %1").arg(reply->errorString()), "AI");
         isTaskRunning = false;
         currentTaskIsControl = false;
+        currentTaskStreamRequested = false;
+        isTaskStreaming = false;
+        isStreamFlushing = false;
+        isStreamFinishing = false;
+        pendingStreamDeltas.clear();
+        pendingFinishOutputText.clear();
         updateNodeStatusBadge();
     }
     reply->deleteLater();
@@ -1085,7 +1305,15 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
 
 QJsonObject AIWorkerPage::parseTaskJsonOutput(const QString &rawText, const QString &taskType)
 {
-    Q_UNUSED(taskType);  // taskType больше не нужен — нет task-specific логики
+    if (taskType == "TASK_EXTERNAL_INFERENCE") {
+        QJsonObject result;
+        result["response"] = rawText.trimmed();
+        result["summary"] = rawText.trimmed().left(4000);
+        if (!currentTurnInput.isEmpty()) {
+            result["turn_input"] = currentTurnInput;
+        }
+        return result;
+    }
 
     QString cleaned = rawText.trimmed();
     if (cleaned.startsWith("```json")) cleaned = cleaned.mid(7);
@@ -1219,6 +1447,12 @@ void AIWorkerPage::onHubSubmitReply(QNetworkReply *reply)
 
     isTaskRunning = false;
     currentTaskIsControl = false;
+    currentTaskStreamRequested = false;
+    isTaskStreaming = false;
+    isStreamFlushing = false;
+    isStreamFinishing = false;
+    pendingStreamDeltas.clear();
+    pendingFinishOutputText.clear();
     currentTaskId = "";
     currentTaskType = "";
     currentClaimNonce = "";
