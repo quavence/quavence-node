@@ -139,7 +139,8 @@ AIWorkerPage::AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent) 
     isTaskStreaming(false),
     currentStreamSeq(1),
     isStreamFlushing(false),
-    isStreamFinishing(false)
+    isStreamFinishing(false),
+    currentTaskToolChoice(QJsonValue::Undefined)
 {
     EnsureSslCertificatesLoaded();
     ui->setupUi(this);
@@ -955,12 +956,24 @@ void AIWorkerPage::onHubClaimReply(QNetworkReply *reply)
 void AIWorkerPage::dispatchTask(const QString &taskId, const QString &taskType,
                                 const QString &claimNonce, const QJsonObject &resultJson, bool isControl)
 {
+    // RED-04 / RT-FINAL-01: Concurrency guard: ignore duplicate claims if already busy
+    if (isTaskRunning) {
+        logMessage(QString("Warning: task %1 dropped — worker is actively busy with task %2.").arg(taskId, currentTaskId), "AI");
+        return;
+    }
     isTaskRunning = true;
     currentTaskId = taskId;
     currentTaskType = taskType;
     currentClaimNonce = claimNonce;
     currentTaskIsControl = isControl;
     currentTurnInput = QJsonObject();
+
+    // CRIT-P01: Atomic reset of tool and embedding state for new task
+    currentTaskTools = QJsonArray();
+    currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
+    accumulatedToolCalls = QJsonArray();
+    pendingStreamToolCallsFrames.clear();
+
     currentTaskStreamRequested = resultJson.value("stream_requested").toBool(false) ||
                                 resultJson.value("stream").toBool(false) ||
                                 (taskType == "TASK_EXTERNAL_INFERENCE");
@@ -974,6 +987,13 @@ void AIWorkerPage::dispatchTask(const QString &taskId, const QString &taskType,
     pendingFinishOutputText.clear();
     updateNodeStatusBadge();
 
+    // LOW-P01 / RED-01: TASK_EMBEDDING routes directly to embedding runner with stream disabled
+    if (taskType == "TASK_EMBEDDING") {
+        currentTaskStreamRequested = false;
+        executeEmbeddingInference(resultJson);
+        return;
+    }
+
     // Hub-First: prompt and system_prompt are pre-assembled by the Hub.
     // The worker is a generic relay — it does not build prompts client-side.
     QString systemPrompt = resultJson.value("system_prompt").toString(
@@ -985,11 +1005,23 @@ void AIWorkerPage::dispatchTask(const QString &taskId, const QString &taskType,
         structuredMessages = resultJson["messages"].toArray();
     }
 
+    // RED-05: Strict validation and extraction of tools array and tool_choice
+    if (resultJson.contains("tools") && resultJson["tools"].isArray()) {
+        currentTaskTools = resultJson["tools"].toArray();
+    }
+    if (resultJson.contains("tool_choice")) {
+        currentTaskToolChoice = resultJson["tool_choice"];
+    }
+
     if (userPrompt.isEmpty() && structuredMessages.isEmpty()) {
         logMessage(QString("Warning: task %1 has no prompt field. Task skipped.").arg(taskId), "AI");
         isTaskRunning = false;
         currentTaskIsControl = false;
         currentTaskStreamRequested = false;
+        currentTaskTools = QJsonArray();
+        currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
+        accumulatedToolCalls = QJsonArray();
+        pendingStreamToolCallsFrames.clear();
         updateNodeStatusBadge();
         return;
     }
@@ -1002,12 +1034,178 @@ void AIWorkerPage::dispatchTask(const QString &taskId, const QString &taskType,
     executeInference(systemPrompt, userPrompt, structuredMessages);
 }
 
+void AIWorkerPage::mergeStreamingToolCall(const QJsonObject &deltaTc)
+{
+    int idx = deltaTc.value("index").toInt(0);
+
+    // Expand accumulatedToolCalls if idx is beyond current size
+    while (accumulatedToolCalls.size() <= idx) {
+        QJsonObject emptyTc;
+        emptyTc["index"] = accumulatedToolCalls.size();
+        emptyTc["id"] = "";
+        emptyTc["type"] = "function";
+        QJsonObject emptyFn;
+        emptyFn["name"] = "";
+        emptyFn["arguments"] = "";
+        emptyTc["function"] = emptyFn;
+        accumulatedToolCalls.append(emptyTc);
+    }
+
+    QJsonObject tc = accumulatedToolCalls[idx].toObject();
+
+    if (deltaTc.contains("id") && !deltaTc["id"].toString().isEmpty()) {
+        tc["id"] = deltaTc["id"].toString();
+    }
+    if (deltaTc.contains("type") && !deltaTc["type"].toString().isEmpty()) {
+        tc["type"] = deltaTc["type"].toString();
+    }
+    if (deltaTc.contains("function") && deltaTc["function"].isObject()) {
+        QJsonObject deltaFn = deltaTc["function"].toObject();
+        QJsonObject fn = tc["function"].toObject();
+        if (deltaFn.contains("name")) {
+            fn["name"] = fn["name"].toString() + deltaFn["name"].toString();
+        }
+        if (deltaFn.contains("arguments")) {
+            fn["arguments"] = fn["arguments"].toString() + deltaFn["arguments"].toString();
+        }
+        tc["function"] = fn;
+    }
+
+    accumulatedToolCalls[idx] = tc;
+}
+
+void AIWorkerPage::executeEmbeddingInference(const QJsonObject &resultJson)
+{
+    logMessage(QString("Executing embedding task %1 via %2...").arg(currentTaskId, ui->comboProvider->currentIndex() == 0 ? "LM Studio" : "Ollama"), "AI");
+
+    QString baseUrl = getSelectedEndpointUrl();
+    QString embedUrl = baseUrl.endsWith("/v1") ? baseUrl + "/embeddings" : baseUrl + "/v1/embeddings";
+
+    QNetworkRequest request(embedUrl);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QJsonObject bodyObj;
+    QString embedModel = hubRequiredEmbedModel.isEmpty() ? "text-embedding-nomic-embed-text-v2-moe" : hubRequiredEmbedModel;
+    if (resultJson.contains("model") && !resultJson["model"].toString().isEmpty()) {
+        embedModel = resultJson["model"].toString();
+    }
+    bodyObj["model"] = embedModel;
+
+    QJsonValue inputVal = resultJson.value("input");
+    if (inputVal.isUndefined() || inputVal.isNull()) {
+        inputVal = resultJson.value("prompt");
+    }
+
+    if (inputVal.isUndefined() || inputVal.isNull() || (inputVal.isString() && inputVal.toString().trimmed().isEmpty()) || (inputVal.isArray() && inputVal.toArray().isEmpty())) {
+        logMessage(QString("Error: Embedding task %1 has empty input. Skipping.").arg(currentTaskId), "AI");
+        isTaskRunning = false;
+        currentTaskIsControl = false;
+        currentTaskStreamRequested = false;
+        currentTaskTools = QJsonArray();
+        currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
+        accumulatedToolCalls = QJsonArray();
+        pendingStreamToolCallsFrames.clear();
+        updateNodeStatusBadge();
+        return;
+    }
+
+    bodyObj["input"] = inputVal;
+    if (resultJson.contains("dimensions")) {
+        bodyObj["dimensions"] = resultJson["dimensions"].toInt();
+    }
+    if (resultJson.contains("encoding_format")) {
+        bodyObj["encoding_format"] = resultJson["encoding_format"].toString();
+    }
+
+    QByteArray body = QJsonDocument(bodyObj).toJson(QJsonDocument::Compact);
+    QNetworkReply *reply = networkManager->post(request, body);
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, bodyObj]() {
+        if (!reply) {
+            isTaskRunning = false;
+            currentTaskIsControl = false;
+            currentTaskStreamRequested = false;
+            currentTaskTools = QJsonArray();
+            currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
+            accumulatedToolCalls = QJsonArray();
+            pendingStreamToolCallsFrames.clear();
+            updateNodeStatusBadge();
+            return;
+        }
+
+        if (reply->error() == QNetworkReply::NoError) {
+            QByteArray rawData = reply->readAll();
+            QJsonDocument doc = QJsonDocument::fromJson(rawData);
+
+            if (doc.isObject()) {
+                QJsonObject root = doc.object();
+                QJsonArray dataArr = root.value("data").toArray();
+
+                // RT-FINAL-02: Strict validation: root object == list, data is array, and data[0].embedding.length > 0
+                bool isValid = false;
+                if (root.value("object").toString() == "list" && !dataArr.isEmpty()) {
+                    QJsonObject firstItem = dataArr[0].toObject();
+                    if (firstItem.contains("embedding") && firstItem["embedding"].isArray()) {
+                        QJsonArray embArray = firstItem["embedding"].toArray();
+                        if (embArray.size() > 0) {
+                            isValid = true;
+                        }
+                    }
+                }
+
+                if (isValid) {
+                    QJsonObject finalResult;
+                    finalResult["object"] = "list";
+                    finalResult["data"] = dataArr;
+                    finalResult["model"] = root.value("model").toString(bodyObj["model"].toString());
+                    if (root.contains("usage") && root["usage"].isObject()) {
+                        finalResult["usage"] = root["usage"].toObject();
+                    }
+                    submitTaskResult(currentTaskId, currentTaskType, currentClaimNonce, finalResult);
+                } else {
+                    logMessage(QString("Error: Invalid or empty embedding returned by model for task %1").arg(currentTaskId), "AI");
+                    isTaskRunning = false;
+                    currentTaskIsControl = false;
+                    currentTaskStreamRequested = false;
+                    currentTaskTools = QJsonArray();
+                    currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
+                    accumulatedToolCalls = QJsonArray();
+                    pendingStreamToolCallsFrames.clear();
+                    updateNodeStatusBadge();
+                }
+            } else {
+                logMessage(QString("Error: Non-JSON embedding response for task %1").arg(currentTaskId), "AI");
+                isTaskRunning = false;
+                currentTaskIsControl = false;
+                currentTaskStreamRequested = false;
+                currentTaskTools = QJsonArray();
+                currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
+                accumulatedToolCalls = QJsonArray();
+                pendingStreamToolCallsFrames.clear();
+                updateNodeStatusBadge();
+            }
+        } else {
+            int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            logMessage(QString("Embedding call failed (%1): %2").arg(status).arg(reply->errorString()), "AI");
+            isTaskRunning = false;
+            currentTaskIsControl = false;
+            currentTaskStreamRequested = false;
+            currentTaskTools = QJsonArray();
+            currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
+            accumulatedToolCalls = QJsonArray();
+            pendingStreamToolCallsFrames.clear();
+            updateNodeStatusBadge();
+        }
+        reply->deleteLater();
+    });
+}
+
 void AIWorkerPage::flushStreamQueue()
 {
     if (isStreamFlushing) {
         return;
     }
-    if (pendingStreamDeltas.isEmpty()) {
+    if (pendingStreamDeltas.isEmpty() && pendingStreamToolCallsFrames.isEmpty()) {
         if (isStreamFinishing) {
             isStreamFinishing = false;
             QString textToSubmit = pendingFinishOutputText;
@@ -1018,8 +1216,20 @@ void AIWorkerPage::flushStreamQueue()
     }
 
     isStreamFlushing = true;
-    QString batchedDelta = pendingStreamDeltas.join("");
-    pendingStreamDeltas.clear();
+    QString batchedDelta;
+    if (!pendingStreamDeltas.isEmpty()) {
+        batchedDelta = pendingStreamDeltas.join("");
+        pendingStreamDeltas.clear();
+    }
+
+    QJsonArray batchedToolCalls;
+    if (!pendingStreamToolCallsFrames.isEmpty()) {
+        for (const QJsonObject &tc : pendingStreamToolCallsFrames) {
+            batchedToolCalls.append(tc);
+        }
+        pendingStreamToolCallsFrames.clear();
+    }
+
     int seq = currentStreamSeq++;
 
     QString token = getWorkerToken();
@@ -1037,7 +1247,12 @@ void AIWorkerPage::flushStreamQueue()
     QJsonObject payload;
     payload["claim_nonce"] = currentClaimNonce;
     payload["seq"] = seq;
-    payload["delta"] = batchedDelta;
+    if (!batchedDelta.isEmpty()) {
+        payload["delta"] = batchedDelta;
+    }
+    if (!batchedToolCalls.isEmpty()) {
+        payload["tool_calls"] = batchedToolCalls;
+    }
     payload["type"] = "chunk";
 
     QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
@@ -1113,6 +1328,18 @@ void AIWorkerPage::onInferenceReadyRead(QNetworkReply *reply)
                             if (!delta.isEmpty()) {
                                 accumulatedStreamText += delta;
                                 pendingStreamDeltas.append(delta);
+                            }
+                            if (deltaObj.contains("tool_calls") && deltaObj["tool_calls"].isArray()) {
+                                QJsonArray tcArr = deltaObj["tool_calls"].toArray();
+                                for (const QJsonValue &tcVal : tcArr) {
+                                    if (tcVal.isObject()) {
+                                        QJsonObject deltaTc = tcVal.toObject();
+                                        mergeStreamingToolCall(deltaTc);
+                                        pendingStreamToolCallsFrames.append(deltaTc);
+                                    }
+                                }
+                            }
+                            if (!pendingStreamDeltas.isEmpty() || !pendingStreamToolCallsFrames.isEmpty()) {
                                 flushStreamQueue();
                             }
                         }
@@ -1154,6 +1381,14 @@ void AIWorkerPage::executeInference(const QString &systemPrompt, const QString &
     bodyObj["max_tokens"] = 2048;
     bodyObj["stream"] = currentTaskStreamRequested;
 
+    // RED-05: Attach tools and tool_choice if present
+    if (!currentTaskTools.isEmpty()) {
+        bodyObj["tools"] = currentTaskTools;
+        if (!currentTaskToolChoice.isUndefined()) {
+            bodyObj["tool_choice"] = currentTaskToolChoice;
+        }
+    }
+
     // Suppress thinking/CoT tokens for reasoning models (e.g. Qwen3/DeepSeek)
     // so they do not exhaust max_tokens before producing the result payload.
     bodyObj["enable_thinking"] = false;
@@ -1167,6 +1402,7 @@ void AIWorkerPage::executeInference(const QString &systemPrompt, const QString &
         accumulatedStreamText.clear();
         streamReadBuffer.clear();
         pendingStreamDeltas.clear();
+        pendingStreamToolCallsFrames.clear();
         isStreamFlushing = false;
         isStreamFinishing = false;
         pendingFinishOutputText.clear();
@@ -1194,6 +1430,10 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
         currentTaskIsControl = false;
         currentTaskStreamRequested = false;
         isTaskStreaming = false;
+        currentTaskTools = QJsonArray();
+        currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
+        accumulatedToolCalls = QJsonArray();
+        pendingStreamToolCallsFrames.clear();
         updateNodeStatusBadge();
         return;
     }
@@ -1217,10 +1457,24 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
                                 if (!choices.isEmpty()) {
                                     QJsonObject choice = choices[0].toObject();
                                     if (choice.contains("delta") && choice["delta"].isObject()) {
-                                        QString delta = choice["delta"].toObject().value("content").toString();
+                                        QJsonObject deltaObj = choice["delta"].toObject();
+                                        QString delta = deltaObj.value("content").toString();
+                                        if (delta.isEmpty()) {
+                                            delta = deltaObj.value("reasoning_content").toString();
+                                        }
                                         if (!delta.isEmpty()) {
                                             accumulatedStreamText += delta;
                                             pendingStreamDeltas.append(delta);
+                                        }
+                                        if (deltaObj.contains("tool_calls") && deltaObj["tool_calls"].isArray()) {
+                                            QJsonArray tcArr = deltaObj["tool_calls"].toArray();
+                                            for (const QJsonValue &tcVal : tcArr) {
+                                                if (tcVal.isObject()) {
+                                                    QJsonObject deltaTc = tcVal.toObject();
+                                                    mergeStreamingToolCall(deltaTc);
+                                                    pendingStreamToolCallsFrames.append(deltaTc);
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1245,6 +1499,13 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
                         finishReason = choice.value("finish_reason").toString();
                         if (choice.contains("message")) {
                             QJsonObject msg = choice["message"].toObject();
+                            // Check tool_calls in message
+                            if (msg.contains("tool_calls") && msg["tool_calls"].isArray()) {
+                                QJsonArray tcArr = msg["tool_calls"].toArray();
+                                if (!tcArr.isEmpty()) {
+                                    accumulatedToolCalls = tcArr;
+                                }
+                            }
                             outputText = msg.value("content").toString().trimmed();
                             // Fallback: If content is empty (e.g. reasoning model in Ollama),
                             // check reasoning_content or reasoning fields
@@ -1267,8 +1528,8 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
             outputText = outputText.remove(reThink).trimmed();
         }
 
-        if (!outputText.isEmpty()) {
-            if (isTaskStreaming && (isStreamFlushing || !pendingStreamDeltas.isEmpty())) {
+        if (!outputText.isEmpty() || !accumulatedToolCalls.isEmpty()) {
+            if (isTaskStreaming && (isStreamFlushing || !pendingStreamDeltas.isEmpty() || !pendingStreamToolCallsFrames.isEmpty())) {
                 isStreamFinishing = true;
                 pendingFinishOutputText = outputText;
                 flushStreamQueue();
@@ -1285,6 +1546,10 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
             isStreamFlushing = false;
             isStreamFinishing = false;
             pendingStreamDeltas.clear();
+            pendingStreamToolCallsFrames.clear();
+            currentTaskTools = QJsonArray();
+            currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
+            accumulatedToolCalls = QJsonArray();
             pendingFinishOutputText.clear();
             updateNodeStatusBadge();
         }
@@ -1297,6 +1562,10 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
         isStreamFlushing = false;
         isStreamFinishing = false;
         pendingStreamDeltas.clear();
+        pendingStreamToolCallsFrames.clear();
+        currentTaskTools = QJsonArray();
+        currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
+        accumulatedToolCalls = QJsonArray();
         pendingFinishOutputText.clear();
         updateNodeStatusBadge();
     }
@@ -1305,6 +1574,22 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
 
 QJsonObject AIWorkerPage::parseTaskJsonOutput(const QString &rawText, const QString &taskType)
 {
+    // RED-06: Tool calls priority: if accumulatedToolCalls is non-empty, return tool_calls payload
+    if (!accumulatedToolCalls.isEmpty()) {
+        QJsonObject result;
+        result["tool_calls"] = accumulatedToolCalls;
+        result["finish_reason"] = "tool_calls";
+        if (!rawText.trimmed().isEmpty()) {
+            result["content"] = rawText.trimmed();
+        } else {
+            result["content"] = QJsonValue(QJsonValue::Null);
+        }
+        if (!currentTurnInput.isEmpty()) {
+            result["turn_input"] = currentTurnInput;
+        }
+        return result;
+    }
+
     if (taskType == "TASK_EXTERNAL_INFERENCE") {
         QJsonObject result;
         result["response"] = rawText.trimmed();
@@ -1426,6 +1711,20 @@ void AIWorkerPage::onHubSubmitReply(QNetworkReply *reply)
     if (!reply) {
         isTaskRunning = false;
         currentTaskIsControl = false;
+        currentTaskStreamRequested = false;
+        isTaskStreaming = false;
+        isStreamFlushing = false;
+        isStreamFinishing = false;
+        pendingStreamDeltas.clear();
+        pendingStreamToolCallsFrames.clear();
+        currentTaskTools = QJsonArray();
+        currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
+        accumulatedToolCalls = QJsonArray();
+        pendingFinishOutputText.clear();
+        currentTaskId = "";
+        currentTaskType = "";
+        currentClaimNonce = "";
+        currentTurnInput = QJsonObject();
         updateNodeStatusBadge();
         return;
     }
@@ -1445,6 +1744,7 @@ void AIWorkerPage::onHubSubmitReply(QNetworkReply *reply)
         logMessage(QString("Submit task %1 failed (%2): %3 %4").arg(currentTaskId).arg(status).arg(reply->errorString(), QString::fromUtf8(data)), "ERR");
     }
 
+    // RT-FINAL-01: Guaranteed full cleanup of task & tool state
     isTaskRunning = false;
     currentTaskIsControl = false;
     currentTaskStreamRequested = false;
@@ -1452,6 +1752,10 @@ void AIWorkerPage::onHubSubmitReply(QNetworkReply *reply)
     isStreamFlushing = false;
     isStreamFinishing = false;
     pendingStreamDeltas.clear();
+    pendingStreamToolCallsFrames.clear();
+    currentTaskTools = QJsonArray();
+    currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
+    accumulatedToolCalls = QJsonArray();
     pendingFinishOutputText.clear();
     currentTaskId = "";
     currentTaskType = "";

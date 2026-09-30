@@ -121,6 +121,10 @@ private:
     bool isStreamFinishing;
     QString pendingFinishOutputText;
     QJsonObject currentTurnInput;
+    QJsonArray currentTaskTools;
+    QJsonValue currentTaskToolChoice;
+    QJsonArray accumulatedToolCalls;
+    QList<QJsonObject> pendingStreamToolCallsFrames;
 
     void logMessage(const QString &msg, const QString &level = "INFO");
     void updateBoostUI();
@@ -141,6 +145,8 @@ private:
     void pollHubTask();
     void dispatchTask(const QString &taskId, const QString &taskType, const QString &claimNonce, const QJsonObject &resultJson, bool isControl = false);
     void executeInference(const QString &systemPrompt, const QString &userPrompt, const QJsonArray &structuredMessages = QJsonArray());
+    void executeEmbeddingInference(const QJsonObject &resultJson);
+    void mergeStreamingToolCall(const QJsonObject &deltaTc);
     void flushStreamQueue();
     void finalizeTaskInference(const QString &outputText);
     void sendStreamChunk(const QString &taskId, const QString &claimNonce, int seq, const QString &delta, const QString &type = "chunk");
