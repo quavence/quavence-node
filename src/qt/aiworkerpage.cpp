@@ -191,6 +191,24 @@ AIWorkerPage::AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent) 
     connect(ui->comboModel, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AIWorkerPage::onModelSelectionChanged);
     connect(ui->comboLinkedAddress, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AIWorkerPage::onAddressSelectionChanged);
     connect(ui->editWorkerToken, &QLineEdit::textChanged, this, &AIWorkerPage::onWorkerTokenChanged);
+    connect(ui->btnCopyLogs, &QPushButton::clicked, this, [this]() {
+        if (ui && ui->textLog) {
+            GUIUtil::setClipboard(ui->textLog->toPlainText());
+            QString prevText = ui->btnCopyLogs->text();
+            ui->btnCopyLogs->setText(tr("Copied!"));
+            QTimer::singleShot(1500, this, [this, prevText]() {
+                if (ui && ui->btnCopyLogs) {
+                    ui->btnCopyLogs->setText(prevText);
+                }
+            });
+        }
+    });
+    connect(ui->btnClearLogs, &QPushButton::clicked, this, [this]() {
+        if (ui && ui->textLog) {
+            ui->textLog->clear();
+            logMessage("Logs cleared by user", "INFO");
+        }
+    });
 
     // Setup timers
     connect(refreshTimer, &QTimer::timeout, this, &AIWorkerPage::onPeriodicRefresh);
