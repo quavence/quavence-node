@@ -65,12 +65,14 @@ public Q_SLOTS:
 
 private Q_SLOTS:
     void onProbeReplyFinished(QNetworkReply *reply);
+    void onProbeV0ReplyFinished(QNetworkReply *reply);
     void onHubPolicyReply(QNetworkReply *reply);
     void onHubHeartbeatReply(QNetworkReply *reply);
     void onHubClaimReply(QNetworkReply *reply);
     void onInferenceReply(QNetworkReply *reply);
     void onInferenceReadyRead(QNetworkReply *reply);
     void onHubSubmitReply(QNetworkReply *reply);
+    void onHubFailReply(QNetworkReply *reply, const QString &taskId);
 
     void onHeartbeatTimer();
     void onClaimPollTimer();
@@ -101,10 +103,12 @@ private:
     int currentBoostPercent;
     int tasksCompletedCount;
 
-    // Hub Policy
+    // Hub Policy & Runtime Probing
     QString hubPolicyVersion;
     QString hubRequiredGenModel;
     QString hubRequiredEmbedModel;
+    int detectedMaxContextTokens;
+    QMap<QString, int> modelContextLengths;
 
     // Current in-flight task state
     QString currentTaskId;
@@ -138,6 +142,7 @@ private:
 
     bool isApprovedGenerationModel(const QString &modelId) const;
     bool isEmbeddingModel(const QString &modelId) const;
+    bool isContextOverflowError(int httpStatus, const QString &errorBody) const;
 
     // Hub Engine Methods
     void fetchHubRuntimePolicy();
@@ -151,6 +156,7 @@ private:
     void finalizeTaskInference(const QString &outputText);
     void sendStreamChunk(const QString &taskId, const QString &claimNonce, int seq, const QString &delta, const QString &type = "chunk");
     void submitTaskResult(const QString &taskId, const QString &taskType, const QString &claimNonce, const QJsonObject &result);
+    void reportTaskFailure(const QString &taskId, const QString &reasonCode, const QString &errorMessage, const QJsonObject &details);
 
     QJsonObject buildRuntimeAttestation() const;
     QString computeHmacSha256(const QString &key, const QString &data) const;
