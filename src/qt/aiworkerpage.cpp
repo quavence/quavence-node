@@ -134,6 +134,7 @@ AIWorkerPage::AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent) 
     hubPolicyVersion("9adf4daa76f246be"),
     hubRequiredGenModel("qwen/qwen3-vl-8b"),
     hubRequiredEmbedModel("text-embedding-nomic-embed-text-v2-moe"),
+    detectedMaxContextTokens(8192),
     currentTaskIsControl(false),
     currentTaskStreamRequested(false),
     isTaskStreaming(false),
@@ -443,6 +444,8 @@ void AIWorkerPage::onModelSelectionChanged(int index)
     if (index < 0) return;
     currentModelName = ui->comboModel->itemText(index);
     isModelPolicyCompliant = isApprovedGenerationModel(currentModelName);
+    detectedMaxContextTokens = modelContextLengths.value(currentModelName, 8192);
+    logMessage(QString("Selected generation model: %1 (context window: %2 tokens)").arg(currentModelName).arg(detectedMaxContextTokens), "POLICY");
     updateNodeStatusBadge();
 }
 
@@ -657,17 +660,131 @@ void AIWorkerPage::updateNodeStatusBadge()
 void AIWorkerPage::onCheckRuntimeConnection()
 {
     QString baseUrl = getSelectedEndpointUrl();
-    QString probeUrl = baseUrl.endsWith("/v1") ? baseUrl + "/models" : baseUrl + "/v1/models";
+
+    QUrl baseQ(baseUrl);
+    QString scheme = baseQ.scheme().isEmpty() ? "http" : baseQ.scheme();
+    QString host = baseQ.host().isEmpty() ? "127.0.0.1" : baseQ.host();
+    int port = baseQ.port() > 0 ? baseQ.port() : 1234;
 
     logMessage(QString("Probing local inference runtime at %1 ...").arg(baseUrl), "NET");
 
-    QNetworkRequest request(probeUrl);
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    // Dynamic Context Probe (ADR-1 / ADR-2):
+    // Try LM Studio v0 API first to detect loaded_context_length and model metadata
+    QString probeV0Url = QString("%1://%2:%3/api/v0/models").arg(scheme, host, QString::number(port));
+    QNetworkRequest requestV0(probeV0Url);
+    requestV0.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
-    QNetworkReply *reply = networkManager->get(request);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        onProbeReplyFinished(reply);
+    QNetworkReply *replyV0 = networkManager->get(requestV0);
+    // Red Team F-05: 5-second timeout on v0 probe to prevent indefinite freeze on hung socket
+    QTimer::singleShot(5000, replyV0, [replyV0]() {
+        if (replyV0 && replyV0->isRunning()) {
+            replyV0->abort();
+        }
     });
+    connect(replyV0, &QNetworkReply::finished, this, [this, replyV0, baseUrl]() {
+        if (replyV0->error() == QNetworkReply::NoError) {
+            onProbeV0ReplyFinished(replyV0);
+        } else {
+            // Fallback to standard OpenAI /v1/models probe if /api/v0/models is not available (e.g. Ollama or custom server)
+            replyV0->deleteLater();
+            QString probeUrl = baseUrl.endsWith("/v1") ? baseUrl + "/models" : baseUrl + "/v1/models";
+            QNetworkRequest request(probeUrl);
+            request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+            QNetworkReply *replyFallback = networkManager->get(request);
+            connect(replyFallback, &QNetworkReply::finished, this, [this, replyFallback]() {
+                onProbeReplyFinished(replyFallback);
+            });
+        }
+    });
+}
+
+void AIWorkerPage::onProbeV0ReplyFinished(QNetworkReply *reply)
+{
+    if (!reply) return;
+
+    QByteArray data = reply->readAll();
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+
+    if (reply->error() == QNetworkReply::NoError && doc.isObject()) {
+        isRuntimeOnline = true;
+        ui->labelRuntimeStatus->setText("ONLINE");
+        ui->labelRuntimeStatus->setStyleSheet("color: #2563eb; font-weight: bold;");
+
+        ui->comboModel->clear();
+        modelContextLengths.clear();
+
+        QJsonObject root = doc.object();
+        if (root.contains("data") && root["data"].isArray()) {
+            QJsonArray models = root["data"].toArray();
+            for (const QJsonValue &v : models) {
+                if (v.isObject()) {
+                    QJsonObject mObj = v.toObject();
+                    QString id = mObj.value("id").toString();
+                    if (!id.isEmpty()) {
+                        ui->comboModel->addItem(id);
+                        int ctx = mObj.value("loaded_context_length").toInt();
+                        if (ctx <= 0) {
+                            ctx = mObj.value("max_context_length").toInt();
+                        }
+                        if (ctx <= 0) {
+                            ctx = 8192;
+                        }
+                        modelContextLengths[id] = ctx;
+                    }
+                }
+            }
+        }
+
+        if (ui->comboModel->count() == 0) {
+            preflightStatus = PreflightStatus::ModelNotLoaded;
+            logMessage("Runtime is online, but no models are loaded in memory. Please load an approved model in LM Studio.", "WARN");
+            if (pendingStartAfterProbe) {
+                pendingStartAfterProbe = false;
+                isWorkerActive = false;
+            }
+        } else {
+            // Auto-select Qwen if present
+            int qwenIdx = -1;
+            for (int i = 0; i < ui->comboModel->count(); ++i) {
+                QString m = ui->comboModel->itemText(i).toLower();
+                if (m.contains("qwen") && m.contains("8b")) {
+                    qwenIdx = i;
+                    break;
+                }
+            }
+            if (qwenIdx >= 0) {
+                ui->comboModel->setCurrentIndex(qwenIdx);
+            }
+
+            currentModelName = ui->comboModel->currentText();
+            isModelPolicyCompliant = isApprovedGenerationModel(currentModelName);
+            detectedMaxContextTokens = modelContextLengths.value(currentModelName, 8192);
+
+            logMessage(QString("Runtime online (LM Studio v0 API). Model: %1, context window: %2 tokens").arg(currentModelName).arg(detectedMaxContextTokens), "POLICY");
+            logMessage("Detected embedding model(s): text-embedding-nomic-embed-text-v2-moe, text-embedding-nomic-embed-text-v1.5", "INFO");
+
+            if (pendingStartAfterProbe) {
+                pendingStartAfterProbe = false;
+                preflightStatus = PreflightStatus::Standby;
+                onToggleWorker(true);
+            }
+        }
+    } else {
+        isRuntimeOnline = false;
+        ui->labelRuntimeStatus->setText("OFFLINE / UNREACHABLE");
+        ui->labelRuntimeStatus->setStyleSheet("color: #f87171; font-weight: bold;");
+        preflightStatus = PreflightStatus::RuntimeOffline;
+        logMessage(QString("Runtime check failed (%1): Local AI runtime is offline or unreachable at %2.")
+            .arg(reply->errorString(), getSelectedEndpointUrl()), "WARN");
+
+        if (pendingStartAfterProbe) {
+            pendingStartAfterProbe = false;
+            isWorkerActive = false;
+            logMessage("Cannot start worker: Local AI runtime is not responding.", "WARN");
+        }
+    }
+    updateNodeStatusBadge();
+    reply->deleteLater();
 }
 
 void AIWorkerPage::onProbeReplyFinished(QNetworkReply *reply)
@@ -716,7 +833,8 @@ void AIWorkerPage::onProbeReplyFinished(QNetworkReply *reply)
 
             currentModelName = ui->comboModel->currentText();
             isModelPolicyCompliant = isApprovedGenerationModel(currentModelName);
-            logMessage(QString("Runtime online. Auto-selected approved generation model: %1").arg(currentModelName), "POLICY");
+            detectedMaxContextTokens = 8192;
+            logMessage(QString("Runtime online (OpenAI v1 fallback). Model: %1, default context window: %2 tokens").arg(currentModelName).arg(detectedMaxContextTokens), "POLICY");
             logMessage("Detected embedding model(s): text-embedding-nomic-embed-text-v2-moe, text-embedding-nomic-embed-text-v1.5", "INFO");
 
             if (pendingStartAfterProbe) {
@@ -882,6 +1000,7 @@ QJsonObject AIWorkerPage::buildRuntimeAttestation() const
     attestation["detected_generation_model"] = currentModelName.isEmpty() ? hubRequiredGenModel : currentModelName;
     attestation["detected_embedding_model"] = hubRequiredEmbedModel.isEmpty() ? "text-embedding-nomic-embed-text-v2-moe" : hubRequiredEmbedModel;
     attestation["runtime_policy_version"] = hubPolicyVersion.isEmpty() ? "9adf4daa76f246be" : hubPolicyVersion;
+    attestation["max_context_tokens"] = detectedMaxContextTokens > 0 ? detectedMaxContextTokens : 8192;
     attestation["streaming"] = true;
     return attestation;
 }
@@ -1572,20 +1691,51 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
             updateNodeStatusBadge();
         }
     } else {
-        logMessage(QString("Inference call failed: %1").arg(reply->errorString()), "AI");
-        isTaskRunning = false;
-        currentTaskIsControl = false;
-        currentTaskStreamRequested = false;
-        isTaskStreaming = false;
-        isStreamFlushing = false;
-        isStreamFinishing = false;
-        pendingStreamDeltas.clear();
-        pendingStreamToolCallsFrames.clear();
-        currentTaskTools = QJsonArray();
-        currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
-        accumulatedToolCalls = QJsonArray();
-        pendingFinishOutputText.clear();
-        updateNodeStatusBadge();
+        int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        QByteArray errData = reply->readAll();
+        QString errString = QString::fromUtf8(errData).trimmed();
+
+        logMessage(QString("Inference call failed (HTTP %1): %2 %3").arg(httpStatus).arg(reply->errorString(), errString.left(256)), "AI");
+
+        if (!currentTaskId.isEmpty()) {
+            // Red Team F-04: Clear stream buffers immediately in error path before async reporting
+            streamReadBuffer.clear();
+            accumulatedStreamText.clear();
+
+            if (isContextOverflowError(httpStatus, errString)) {
+                QJsonObject details;
+                details["http_status"] = httpStatus;
+                details["error"] = errString.left(512);
+                details["n_ctx"] = detectedMaxContextTokens;
+                details["reply_error"] = reply->errorString();
+
+                logMessage(QString("Fail-Fast: Context overflow detected for task %1. Reporting to Hub...").arg(currentTaskId), "WARN");
+                reportTaskFailure(currentTaskId, "context_overflow", QString("Context window exceeded: %1").arg(errString.left(256)), details);
+
+                // Local downgrade to safe baseline
+                detectedMaxContextTokens = 8192;
+            } else {
+                QString reasonCode = (httpStatus == 0) ? "runtime_unavailable" : "provider_error";
+                QJsonObject details;
+                details["http_status"] = httpStatus;
+                details["error"] = errString.isEmpty() ? reply->errorString() : errString.left(512);
+                reportTaskFailure(currentTaskId, reasonCode, reply->errorString(), details);
+            }
+        } else {
+            isTaskRunning = false;
+            currentTaskIsControl = false;
+            currentTaskStreamRequested = false;
+            isTaskStreaming = false;
+            isStreamFlushing = false;
+            isStreamFinishing = false;
+            pendingStreamDeltas.clear();
+            pendingStreamToolCallsFrames.clear();
+            currentTaskTools = QJsonArray();
+            currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
+            accumulatedToolCalls = QJsonArray();
+            pendingFinishOutputText.clear();
+            updateNodeStatusBadge();
+        }
     }
     reply->deleteLater();
 }
@@ -1781,4 +1931,130 @@ void AIWorkerPage::onHubSubmitReply(QNetworkReply *reply)
     currentTurnInput = QJsonObject();
     updateNodeStatusBadge();
     reply->deleteLater();
+}
+
+bool AIWorkerPage::isContextOverflowError(int httpStatus, const QString &errorBody) const
+{
+    QString err = errorBody.toLower();
+    if (err.contains("n_ctx") || err.contains("n_keep")) {
+        return true;
+    }
+    if (err.contains("context") && (err.contains("overflow") || err.contains("exceed") || err.contains("too large") || err.contains("maximum context"))) {
+        return true;
+    }
+    if (httpStatus >= 400) {
+        if (err.contains("cuda out of memory")) {
+            return true;
+        }
+        if (err.contains("out of memory") && (err.contains("kv cache") || err.contains("llama") || err.contains("cuda") || err.contains("context") || err.contains("allocation"))) {
+            return true;
+        }
+        static QRegularExpression reOom(QStringLiteral("\\boom\\b"));
+        if (reOom.match(err).hasMatch() && (err.contains("vram") || err.contains("gpu") || err.contains("memory"))) {
+            return true;
+        }
+        if (err.contains("prompt") && (err.contains("too long") || err.contains("exceeds"))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void AIWorkerPage::reportTaskFailure(const QString &taskId, const QString &reasonCode, const QString &errorMessage, const QJsonObject &details)
+{
+    // Red Team F-02: Concurrency guard against double-fire or reporting on stale/cleared task
+    if (currentTaskId.isEmpty() || currentTaskId != taskId) {
+        logMessage(QString("reportTaskFailure: task %1 stale or already cleared, skip").arg(taskId), "WARN");
+        return;
+    }
+
+    QString token = getWorkerToken();
+    if (token.isEmpty() || taskId.isEmpty()) {
+        isTaskRunning = false;
+        currentTaskIsControl = false;
+        currentTaskStreamRequested = false;
+        isTaskStreaming = false;
+        isStreamFlushing = false;
+        isStreamFinishing = false;
+        pendingStreamDeltas.clear();
+        pendingStreamToolCallsFrames.clear();
+        currentTaskTools = QJsonArray();
+        currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
+        accumulatedToolCalls = QJsonArray();
+        pendingFinishOutputText.clear();
+        currentTaskId = "";
+        currentTaskType = "";
+        currentClaimNonce = "";
+        currentTurnInput = QJsonObject();
+        updateNodeStatusBadge();
+        return;
+    }
+
+    qint64 reportTimestamp = QDateTime::currentSecsSinceEpoch();
+    QString reportNonce = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    QString signaturePayload = QString("%1.fail.%2.%3").arg(taskId, QString::number(reportTimestamp), reportNonce);
+    QString signature = computeHmacSha256(token, signaturePayload);
+
+    QUrl url(getHubBaseUrl() + QString("/api/ai/nodes/tasks/%1/fail").arg(taskId));
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setRawHeader("Authorization", QString("Bearer %1").arg(token).toUtf8());
+    request.setRawHeader("X-AI-Worker-Device-ID", workerDeviceId.toUtf8());
+
+    QJsonObject payload;
+    payload["reason_code"] = reasonCode;
+    payload["error_message"] = errorMessage;
+    payload["details"] = details;
+    payload["model"] = currentModelName;
+    payload["provider"] = "openai_compat";
+    payload["report_timestamp"] = reportTimestamp;
+    payload["report_nonce"] = reportNonce;
+    payload["report_signature"] = signature;
+
+    QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+    QNetworkReply *reply = networkManager->post(request, body);
+    connect(reply, &QNetworkReply::sslErrors, this, [this](const QList<QSslError> &errors) {
+        for (const auto &err : errors) {
+            logMessage(QString("Task Fail SSL Error: %1").arg(err.errorString()), "SSL");
+        }
+    });
+    connect(reply, &QNetworkReply::finished, this, [this, reply, taskId]() {
+        onHubFailReply(reply, taskId);
+    });
+}
+
+void AIWorkerPage::onHubFailReply(QNetworkReply *reply, const QString &taskId)
+{
+    if (reply) {
+        int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        QByteArray data = reply->readAll();
+        if (reply->error() == QNetworkReply::NoError) {
+            QJsonDocument doc = QJsonDocument::fromJson(data);
+            bool requeued = doc.isObject() && doc.object().value("requeued").toBool();
+            logMessage(QString("✓ Task %1 failure reported to Hub (requeued: %2)").arg(taskId).arg(requeued ? "yes" : "no"), "OK");
+        } else {
+            logMessage(QString("Fail report for task %1 rejected by Hub (%2): %3 %4")
+                .arg(taskId).arg(status).arg(reply->errorString(), QString::fromUtf8(data)), "WARN");
+        }
+        reply->deleteLater();
+    }
+
+    // RT-FINAL-01 / Dumb Runner Rule 4.3: Guaranteed full atomic cleanup of task & tool state
+    isTaskRunning = false;
+    currentTaskIsControl = false;
+    currentTaskStreamRequested = false;
+    isTaskStreaming = false;
+    isStreamFlushing = false;
+    isStreamFinishing = false;
+    pendingStreamDeltas.clear();
+    pendingStreamToolCallsFrames.clear();
+    currentTaskTools = QJsonArray();
+    currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
+    accumulatedToolCalls = QJsonArray();
+    pendingFinishOutputText.clear();
+    currentTaskId = "";
+    currentTaskType = "";
+    currentClaimNonce = "";
+    currentTurnInput = QJsonObject();
+    updateNodeStatusBadge();
 }
