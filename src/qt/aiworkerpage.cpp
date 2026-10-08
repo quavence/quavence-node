@@ -264,6 +264,19 @@ void AIWorkerPage::loadSettings()
     ui->editEndpointUrl->setText(settings.value("endpointUrl", DEFAULT_LM_STUDIO_URL).toString());
     ui->comboProvider->setCurrentIndex(settings.value("providerIndex", 0).toInt());
     isWorkerActive = settings.value("workerEnabled", false).toBool();
+
+    QString savedModel = settings.value("selectedModel").toString().trimmed();
+    if (!savedModel.isEmpty()) {
+        currentModelName = savedModel;
+        const bool blocked = ui->comboModel->blockSignals(true);
+        if (ui->comboModel->findText(savedModel) == -1) {
+            ui->comboModel->clear();
+            ui->comboModel->addItem(savedModel);
+        }
+        ui->comboModel->setCurrentText(savedModel);
+        ui->comboModel->blockSignals(blocked);
+        isModelPolicyCompliant = isApprovedGenerationModel(currentModelName);
+    }
     settings.endGroup();
 }
 
@@ -275,6 +288,9 @@ void AIWorkerPage::saveSettings()
     settings.setValue("endpointUrl", ui->editEndpointUrl->text().trimmed());
     settings.setValue("providerIndex", ui->comboProvider->currentIndex());
     settings.setValue("workerEnabled", isWorkerActive);
+    if (!currentModelName.isEmpty()) {
+        settings.setValue("selectedModel", currentModelName);
+    }
     settings.endGroup();
 }
 
@@ -445,6 +461,12 @@ void AIWorkerPage::onModelSelectionChanged(int index)
     currentModelName = ui->comboModel->itemText(index);
     isModelPolicyCompliant = isApprovedGenerationModel(currentModelName);
     detectedMaxContextTokens = modelContextLengths.value(currentModelName, 8192);
+
+    QSettings settings;
+    settings.beginGroup(SETTINGS_GROUP);
+    settings.setValue("selectedModel", currentModelName);
+    settings.endGroup();
+
     logMessage(QString("Selected generation model: %1 (context window: %2 tokens)").arg(currentModelName).arg(detectedMaxContextTokens), "POLICY");
     updateNodeStatusBadge();
 }
@@ -710,6 +732,15 @@ void AIWorkerPage::onProbeV0ReplyFinished(QNetworkReply *reply)
         ui->labelRuntimeStatus->setText("ONLINE");
         ui->labelRuntimeStatus->setStyleSheet("color: #2563eb; font-weight: bold;");
 
+        QString preferredModel = currentModelName.trimmed();
+        if (preferredModel.isEmpty()) {
+            QSettings settings;
+            settings.beginGroup(SETTINGS_GROUP);
+            preferredModel = settings.value("selectedModel").toString().trimmed();
+            settings.endGroup();
+        }
+
+        const bool blocked = ui->comboModel->blockSignals(true);
         ui->comboModel->clear();
         modelContextLengths.clear();
 
@@ -736,6 +767,7 @@ void AIWorkerPage::onProbeV0ReplyFinished(QNetworkReply *reply)
         }
 
         if (ui->comboModel->count() == 0) {
+            ui->comboModel->blockSignals(blocked);
             preflightStatus = PreflightStatus::ModelNotLoaded;
             logMessage("Runtime is online, but no models are loaded in memory. Please load an approved model in LM Studio.", "WARN");
             if (pendingStartAfterProbe) {
@@ -743,22 +775,75 @@ void AIWorkerPage::onProbeV0ReplyFinished(QNetworkReply *reply)
                 isWorkerActive = false;
             }
         } else {
-            // Auto-select Qwen if present
-            int qwenIdx = -1;
-            for (int i = 0; i < ui->comboModel->count(); ++i) {
-                QString m = ui->comboModel->itemText(i).toLower();
-                if (m.contains("qwen") && m.contains("8b")) {
-                    qwenIdx = i;
-                    break;
+            int targetIdx = -1;
+
+            // Priority 1: Exact match with preferredModel
+            if (!preferredModel.isEmpty()) {
+                targetIdx = ui->comboModel->findText(preferredModel, Qt::MatchExactly);
+            }
+
+            // Priority 2: Case-insensitive match with preferredModel
+            if (targetIdx < 0 && !preferredModel.isEmpty()) {
+                for (int i = 0; i < ui->comboModel->count(); ++i) {
+                    if (ui->comboModel->itemText(i).compare(preferredModel, Qt::CaseInsensitive) == 0) {
+                        targetIdx = i;
+                        break;
+                    }
                 }
             }
-            if (qwenIdx >= 0) {
-                ui->comboModel->setCurrentIndex(qwenIdx);
+
+            // Priority 3: Substring / Normalized match
+            if (targetIdx < 0 && !preferredModel.isEmpty()) {
+                QString prefLower = preferredModel.toLower();
+                for (int i = 0; i < ui->comboModel->count(); ++i) {
+                    QString itemLower = ui->comboModel->itemText(i).toLower();
+                    if (!isEmbeddingModel(itemLower)) {
+                        if (itemLower.contains(prefLower) || prefLower.contains(itemLower)) {
+                            targetIdx = i;
+                            break;
+                        }
+                    }
+                }
             }
+
+            // Priority 4: First launch / fallback: Tier 1 baseline (qwen + 8b)
+            if (targetIdx < 0) {
+                for (int i = 0; i < ui->comboModel->count(); ++i) {
+                    QString m = ui->comboModel->itemText(i).toLower();
+                    if (m.contains("qwen") && m.contains("8b")) {
+                        targetIdx = i;
+                        break;
+                    }
+                }
+            }
+
+            // Priority 5: Fallback: any generative qwen model
+            if (targetIdx < 0) {
+                for (int i = 0; i < ui->comboModel->count(); ++i) {
+                    QString m = ui->comboModel->itemText(i).toLower();
+                    if (m.contains("qwen") && !isEmbeddingModel(m)) {
+                        targetIdx = i;
+                        break;
+                    }
+                }
+            }
+
+            // Priority 6: Safety Fallback to first available model
+            if (targetIdx < 0) {
+                targetIdx = 0;
+            }
+
+            ui->comboModel->setCurrentIndex(targetIdx);
+            ui->comboModel->blockSignals(blocked);
 
             currentModelName = ui->comboModel->currentText();
             isModelPolicyCompliant = isApprovedGenerationModel(currentModelName);
             detectedMaxContextTokens = modelContextLengths.value(currentModelName, 8192);
+
+            QSettings settings;
+            settings.beginGroup(SETTINGS_GROUP);
+            settings.setValue("selectedModel", currentModelName);
+            settings.endGroup();
 
             logMessage(QString("Runtime online (LM Studio v0 API). Model: %1, context window: %2 tokens").arg(currentModelName).arg(detectedMaxContextTokens), "POLICY");
             logMessage("Detected embedding model(s): text-embedding-nomic-embed-text-v2-moe, text-embedding-nomic-embed-text-v1.5", "INFO");
@@ -799,6 +884,15 @@ void AIWorkerPage::onProbeReplyFinished(QNetworkReply *reply)
         ui->labelRuntimeStatus->setText("ONLINE");
         ui->labelRuntimeStatus->setStyleSheet("color: #2563eb; font-weight: bold;");
 
+        QString preferredModel = currentModelName.trimmed();
+        if (preferredModel.isEmpty()) {
+            QSettings settings;
+            settings.beginGroup(SETTINGS_GROUP);
+            preferredModel = settings.value("selectedModel").toString().trimmed();
+            settings.endGroup();
+        }
+
+        const bool blocked = ui->comboModel->blockSignals(true);
         ui->comboModel->clear();
         QJsonObject root = doc.object();
         if (root.contains("data") && root["data"].isArray()) {
@@ -811,6 +905,7 @@ void AIWorkerPage::onProbeReplyFinished(QNetworkReply *reply)
         }
 
         if (ui->comboModel->count() == 0) {
+            ui->comboModel->blockSignals(blocked);
             preflightStatus = PreflightStatus::ModelNotLoaded;
             logMessage("Runtime is online, but no models are loaded in memory. Please load an approved model in LM Studio.", "WARN");
             if (pendingStartAfterProbe) {
@@ -818,22 +913,76 @@ void AIWorkerPage::onProbeReplyFinished(QNetworkReply *reply)
                 isWorkerActive = false;
             }
         } else {
-            // Auto-select Qwen if present
-            int qwenIdx = -1;
-            for (int i = 0; i < ui->comboModel->count(); ++i) {
-                QString m = ui->comboModel->itemText(i).toLower();
-                if (m.contains("qwen") && m.contains("8b")) {
-                    qwenIdx = i;
-                    break;
+            int targetIdx = -1;
+
+            // Priority 1: Exact match with preferredModel
+            if (!preferredModel.isEmpty()) {
+                targetIdx = ui->comboModel->findText(preferredModel, Qt::MatchExactly);
+            }
+
+            // Priority 2: Case-insensitive match with preferredModel
+            if (targetIdx < 0 && !preferredModel.isEmpty()) {
+                for (int i = 0; i < ui->comboModel->count(); ++i) {
+                    if (ui->comboModel->itemText(i).compare(preferredModel, Qt::CaseInsensitive) == 0) {
+                        targetIdx = i;
+                        break;
+                    }
                 }
             }
-            if (qwenIdx >= 0) {
-                ui->comboModel->setCurrentIndex(qwenIdx);
+
+            // Priority 3: Substring / Normalized match
+            if (targetIdx < 0 && !preferredModel.isEmpty()) {
+                QString prefLower = preferredModel.toLower();
+                for (int i = 0; i < ui->comboModel->count(); ++i) {
+                    QString itemLower = ui->comboModel->itemText(i).toLower();
+                    if (!isEmbeddingModel(itemLower)) {
+                        if (itemLower.contains(prefLower) || prefLower.contains(itemLower)) {
+                            targetIdx = i;
+                            break;
+                        }
+                    }
+                }
             }
+
+            // Priority 4: First launch / fallback: Tier 1 baseline (qwen + 8b)
+            if (targetIdx < 0) {
+                for (int i = 0; i < ui->comboModel->count(); ++i) {
+                    QString m = ui->comboModel->itemText(i).toLower();
+                    if (m.contains("qwen") && m.contains("8b")) {
+                        targetIdx = i;
+                        break;
+                    }
+                }
+            }
+
+            // Priority 5: Fallback: any generative qwen model
+            if (targetIdx < 0) {
+                for (int i = 0; i < ui->comboModel->count(); ++i) {
+                    QString m = ui->comboModel->itemText(i).toLower();
+                    if (m.contains("qwen") && !isEmbeddingModel(m)) {
+                        targetIdx = i;
+                        break;
+                    }
+                }
+            }
+
+            // Priority 6: Safety Fallback to first available model
+            if (targetIdx < 0) {
+                targetIdx = 0;
+            }
+
+            ui->comboModel->setCurrentIndex(targetIdx);
+            ui->comboModel->blockSignals(blocked);
 
             currentModelName = ui->comboModel->currentText();
             isModelPolicyCompliant = isApprovedGenerationModel(currentModelName);
             detectedMaxContextTokens = 8192;
+
+            QSettings settings;
+            settings.beginGroup(SETTINGS_GROUP);
+            settings.setValue("selectedModel", currentModelName);
+            settings.endGroup();
+
             logMessage(QString("Runtime online (OpenAI v1 fallback). Model: %1, default context window: %2 tokens").arg(currentModelName).arg(detectedMaxContextTokens), "POLICY");
             logMessage("Detected embedding model(s): text-embedding-nomic-embed-text-v2-moe, text-embedding-nomic-embed-text-v1.5", "INFO");
 
@@ -916,7 +1065,7 @@ void AIWorkerPage::onHubPolicyReply(QNetworkReply *reply)
             if (pol.contains("embedding_model")) hubRequiredEmbedModel = pol["embedding_model"].toString();
             else if (pol.contains("required_embedding_model")) hubRequiredEmbedModel = pol["required_embedding_model"].toString();
 
-            logMessage(QString("Synced Hub Policy (version: %1, required: %2)").arg(hubPolicyVersion.left(16), hubRequiredGenModel), "HUB");
+            logMessage(QString("Synced Hub Policy (version: %1, baseline: %2 [Tier 1])").arg(hubPolicyVersion.left(16), hubRequiredGenModel), "HUB");
             isModelPolicyCompliant = isApprovedGenerationModel(currentModelName);
             updateNodeStatusBadge();
         }
