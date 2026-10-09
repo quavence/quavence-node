@@ -1020,8 +1020,12 @@ void AIWorkerPage::onProbeReplyFinished(QNetworkReply *reply)
 
 bool AIWorkerPage::isApprovedGenerationModel(const QString &modelId) const
 {
-    QString m = modelId.toLower();
-    QString req = hubRequiredGenModel.toLower();
+    QString m = modelId.toLower().trimmed();
+    if (m.isEmpty()) {
+        return false;
+    }
+
+    QString req = hubRequiredGenModel.toLower().trimmed();
 
     // 1. Exact or substring match with baseline model required by Hub
     if (!req.isEmpty() && (m.contains(req) || req.contains(m))) {
