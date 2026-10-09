@@ -30,6 +30,7 @@
 #include <QRegularExpression>
 #include <QUrl>
 #include <QUrlQuery>
+#include <QPointer>
 #include <openssl/ssl.h>
 #include <openssl/crypto.h>
 #include <QtNetwork/QSslSocket>
@@ -733,12 +734,12 @@ void AIWorkerPage::onProbeV0ReplyFinished(QNetworkReply *reply)
         ui->labelRuntimeStatus->setText("ONLINE");
         ui->labelRuntimeStatus->setStyleSheet("color: #2563eb; font-weight: bold;");
 
-        QString preferredModel = currentModelName.trimmed();
+        QSettings settings;
+        settings.beginGroup(SETTINGS_GROUP);
+        QString preferredModel = settings.value("selectedModel").toString().trimmed();
+        settings.endGroup();
         if (preferredModel.isEmpty()) {
-            QSettings settings;
-            settings.beginGroup(SETTINGS_GROUP);
-            preferredModel = settings.value("selectedModel").toString().trimmed();
-            settings.endGroup();
+            preferredModel = currentModelName.trimmed();
         }
 
         const bool blocked = ui->comboModel->blockSignals(true);
@@ -888,12 +889,12 @@ void AIWorkerPage::onProbeReplyFinished(QNetworkReply *reply)
         ui->labelRuntimeStatus->setText("ONLINE");
         ui->labelRuntimeStatus->setStyleSheet("color: #2563eb; font-weight: bold;");
 
-        QString preferredModel = currentModelName.trimmed();
+        QSettings settings;
+        settings.beginGroup(SETTINGS_GROUP);
+        QString preferredModel = settings.value("selectedModel").toString().trimmed();
+        settings.endGroup();
         if (preferredModel.isEmpty()) {
-            QSettings settings;
-            settings.beginGroup(SETTINGS_GROUP);
-            preferredModel = settings.value("selectedModel").toString().trimmed();
-            settings.endGroup();
+            preferredModel = currentModelName.trimmed();
         }
 
         const bool blocked = ui->comboModel->blockSignals(true);
@@ -1021,7 +1022,21 @@ bool AIWorkerPage::isApprovedGenerationModel(const QString &modelId) const
 {
     QString m = modelId.toLower();
     QString req = hubRequiredGenModel.toLower();
-    return (m.contains("qwen") || m.contains(req) || req.contains(m));
+
+    // 1. Exact or substring match with baseline model required by Hub
+    if (!req.isEmpty() && (m.contains(req) || req.contains(m))) {
+        return true;
+    }
+
+    // 2. Match against any allowed model provided by Hub runtime policy
+    for (const QString &allowed : hubAllowedGenModels) {
+        if (!allowed.isEmpty() && (m.contains(allowed) || allowed.contains(m))) {
+            return true;
+        }
+    }
+
+    // 3. Permissive safety fallback for standard approved Qwen family
+    return m.contains("qwen");
 }
 
 bool AIWorkerPage::isEmbeddingModel(const QString &modelId) const
@@ -1076,6 +1091,16 @@ void AIWorkerPage::onHubPolicyReply(QNetworkReply *reply)
                 hubTier = pol["tier"].toInt(1);
             } else {
                 hubTier = 1;
+            }
+
+            hubAllowedGenModels.clear();
+            if (pol.contains("allowed_generation_models") && pol["allowed_generation_models"].isArray()) {
+                QJsonArray arr = pol["allowed_generation_models"].toArray();
+                for (const QJsonValue &v : arr) {
+                    if (v.isString() && !v.toString().trimmed().isEmpty()) {
+                        hubAllowedGenModels.append(v.toString().trimmed().toLower());
+                    }
+                }
             }
 
             logMessage(QString("Synced Hub Policy (version: %1, baseline: %2 [Tier %3])")
@@ -1420,6 +1445,16 @@ void AIWorkerPage::executeEmbeddingInference(const QJsonObject &resultJson)
     QByteArray body = QJsonDocument(bodyObj).toJson(QJsonDocument::Compact);
     QNetworkReply *reply = networkManager->post(request, body);
 
+    // Watchdog: 60s timeout on local LM Studio embedding to prevent permanent hang
+    const QString embedTaskId = currentTaskId;
+    QPointer<QNetworkReply> embedReplyPtr(reply);
+    QTimer::singleShot(60000, this, [this, embedReplyPtr, embedTaskId]() {
+        if (embedReplyPtr && embedReplyPtr->isRunning() && isTaskRunning && currentTaskId == embedTaskId) {
+            logMessage(QString("Warning: Embedding task %1 timed out after 60s (LM Studio hung). Aborting request.").arg(embedTaskId), "WARN");
+            embedReplyPtr->abort();
+        }
+    });
+
     connect(reply, &QNetworkReply::finished, this, [this, reply, bodyObj]() {
         if (!reply) {
             isTaskRunning = false;
@@ -1711,6 +1746,16 @@ void AIWorkerPage::executeInference(const QString &systemPrompt, const QString &
 
     QByteArray body = QJsonDocument(bodyObj).toJson(QJsonDocument::Compact);
     QNetworkReply *reply = networkManager->post(request, body);
+
+    // Watchdog: 120s timeout on local LM Studio inference to prevent permanent hang
+    const QString inferenceTaskId = currentTaskId;
+    QPointer<QNetworkReply> inferenceReplyPtr(reply);
+    QTimer::singleShot(120000, this, [this, inferenceReplyPtr, inferenceTaskId]() {
+        if (inferenceReplyPtr && inferenceReplyPtr->isRunning() && isTaskRunning && currentTaskId == inferenceTaskId) {
+            logMessage(QString("Warning: Inference task %1 timed out after 120s (LM Studio hung). Aborting request.").arg(inferenceTaskId), "WARN");
+            inferenceReplyPtr->abort();
+        }
+    });
 
     if (currentTaskStreamRequested) {
         connect(reply, &QNetworkReply::readyRead, this, [this, reply]() {
