@@ -134,6 +134,7 @@ AIWorkerPage::AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent) 
     hubPolicyVersion("9adf4daa76f246be"),
     hubRequiredGenModel("qwen/qwen3-vl-8b"),
     hubRequiredEmbedModel("text-embedding-nomic-embed-text-v2-moe"),
+    hubTier(1),
     detectedMaxContextTokens(8192),
     currentTaskIsControl(false),
     currentTaskStreamRequested(false),
@@ -806,13 +807,16 @@ void AIWorkerPage::onProbeV0ReplyFinished(QNetworkReply *reply)
                 }
             }
 
-            // Priority 4: First launch / fallback: Tier 1 baseline (qwen + 8b)
-            if (targetIdx < 0) {
+            // Priority 4: First launch / fallback: Follow Hub required baseline model (Dumb Runner)
+            if (targetIdx < 0 && !hubRequiredGenModel.isEmpty()) {
+                const QString reqLower = hubRequiredGenModel.toLower();
                 for (int i = 0; i < ui->comboModel->count(); ++i) {
                     QString m = ui->comboModel->itemText(i).toLower();
-                    if (m.contains("qwen") && m.contains("8b")) {
-                        targetIdx = i;
-                        break;
+                    if (!isEmbeddingModel(m)) {
+                        if (m.contains(reqLower) || reqLower.contains(m)) {
+                            targetIdx = i;
+                            break;
+                        }
                     }
                 }
             }
@@ -944,13 +948,16 @@ void AIWorkerPage::onProbeReplyFinished(QNetworkReply *reply)
                 }
             }
 
-            // Priority 4: First launch / fallback: Tier 1 baseline (qwen + 8b)
-            if (targetIdx < 0) {
+            // Priority 4: First launch / fallback: Follow Hub required baseline model (Dumb Runner)
+            if (targetIdx < 0 && !hubRequiredGenModel.isEmpty()) {
+                const QString reqLower = hubRequiredGenModel.toLower();
                 for (int i = 0; i < ui->comboModel->count(); ++i) {
                     QString m = ui->comboModel->itemText(i).toLower();
-                    if (m.contains("qwen") && m.contains("8b")) {
-                        targetIdx = i;
-                        break;
+                    if (!isEmbeddingModel(m)) {
+                        if (m.contains(reqLower) || reqLower.contains(m)) {
+                            targetIdx = i;
+                            break;
+                        }
                     }
                 }
             }
@@ -1065,7 +1072,14 @@ void AIWorkerPage::onHubPolicyReply(QNetworkReply *reply)
             if (pol.contains("embedding_model")) hubRequiredEmbedModel = pol["embedding_model"].toString();
             else if (pol.contains("required_embedding_model")) hubRequiredEmbedModel = pol["required_embedding_model"].toString();
 
-            logMessage(QString("Synced Hub Policy (version: %1, baseline: %2 [Tier 1])").arg(hubPolicyVersion.left(16), hubRequiredGenModel), "HUB");
+            if (pol.contains("tier")) {
+                hubTier = pol["tier"].toInt(1);
+            } else {
+                hubTier = 1;
+            }
+
+            logMessage(QString("Synced Hub Policy (version: %1, baseline: %2 [Tier %3])")
+                .arg(hubPolicyVersion.left(16), hubRequiredGenModel).arg(hubTier), "HUB");
             isModelPolicyCompliant = isApprovedGenerationModel(currentModelName);
             updateNodeStatusBadge();
         }
