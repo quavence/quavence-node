@@ -107,6 +107,7 @@ private:
     QString hubPolicyVersion;
     QString hubRequiredGenModel;
     QString hubRequiredEmbedModel;
+    int hubTier;
     int detectedMaxContextTokens;
     QMap<QString, int> modelContextLengths;
 
