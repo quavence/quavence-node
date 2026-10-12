@@ -83,7 +83,7 @@ BOOST_AUTO_TEST_CASE(pous_authorization_bypass_regression_test)
     std::string reason;
     BOOST_CHECK(IsStandardTx(forged, reason));
 
-    // Assertion 3 & 4: Under legacy height (< activation height 100), the old vulnerability permitted it
+    // Assertion 3 & 4: Under legacy height (< activation height 100), legacy rule permitted it
     int legacyHeight = 50;
     BOOST_CHECK_MESSAGE(IsAuthorizedAiPoolTx(forged, legacyHeight),
                         "Legacy height should permit pre-activation historical blocks");

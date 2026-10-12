@@ -239,7 +239,7 @@ BOOST_AUTO_TEST_CASE(vector4_coinstake_split_consensus_softfork_verification)
     BOOST_CHECK_MESSAGE(greedyPassesConsensus,
                         "Greedy miner coinstake (100% reward) ALSO PASSES current ConnectBlock consensus check!");
 
-    // Architectural finding:
+    // Consensus invariant:
     // Because the greedy coinstake is currently accepted by ConnectBlock, enforcing the Dev Fund
     // and AI Pool split at the consensus level will RESTRICT the set of valid blocks.
     // Restricting valid blocks is by definition a SOFT FORK.
