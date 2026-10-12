@@ -22,6 +22,8 @@
 #endif
 
 #include <QApplication>
+#include <QFont>
+#include <QFontMetrics>
 #include <QCloseEvent>
 #include <QDesktopWidget>
 #include <QPainter>
@@ -56,7 +58,7 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
 
     QString titleAddText    = networkStyle->getTitleAddText();
 
-    QString font            = QApplication::font().toString();
+    QFont baseFont          = QApplication::font();
 
     // create a bitmap according to device pixelratio
     QSize splashSize(620*devicePixelRatio, 360*devicePixelRatio);
@@ -106,14 +108,18 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
 
     // Title and version (right column)
     pixPaint.setPen(COLOR_BRAND_PRIMARY);
-    pixPaint.setFont(QFont(font, 33*fontFactor));
+    QFont measureFont = baseFont;
+    measureFont.setPointSize(qMax(1, int(33 * fontFactor)));
+    pixPaint.setFont(measureFont);
     QFontMetrics fm = pixPaint.fontMetrics();
     int titleTextWidth = fm.width(titleText);
     if (titleTextWidth > textWidth) {
         fontFactor = fontFactor * textWidth / titleTextWidth;
     }
 
-    QFont titleFont(font, int(32 * fontFactor), QFont::Bold);
+    QFont titleFont = baseFont;
+    titleFont.setPointSize(qMax(1, int(32 * fontFactor)));
+    titleFont.setWeight(QFont::Bold);
     pixPaint.setFont(titleFont);
     pixPaint.setPen(QColor(15, 23, 42)); // Modern deep slate
     fm = pixPaint.fontMetrics();
@@ -123,14 +129,19 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
 
     pixPaint.setPen(QColor(100, 116, 139)); // Slate muted
     int versionFontSize = qMax(10, int(14 * fontFactor));
-    pixPaint.setFont(QFont(font, versionFontSize, QFont::Medium));
+    QFont versionFont = baseFont;
+    versionFont.setPointSize(versionFontSize);
+    versionFont.setWeight(QFont::Medium);
+    pixPaint.setFont(versionFont);
     QFontMetrics versionFm = pixPaint.fontMetrics();
 
     // if the version string is too long, reduce size
     int versionTextWidth = versionFm.width(versionText);
     if (versionTextWidth > textWidth) {
         versionFontSize = qMax(10, int(10 * fontFactor));
-        pixPaint.setFont(QFont(font, versionFontSize));
+        versionFont.setPointSize(versionFontSize);
+        versionFont.setWeight(QFont::Normal);
+        pixPaint.setFont(versionFont);
         versionFm = pixPaint.fontMetrics();
         versionTextWidth = versionFm.width(versionText);
     }
@@ -140,7 +151,9 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     // Copyright (Clean left aligned with Title & Version)
     {
         const int crFontSize = qMax(7, int(8 * fontFactor));
-        pixPaint.setFont(QFont(font, crFontSize));
+        QFont crFont = baseFont;
+        crFont.setPointSize(crFontSize);
+        pixPaint.setFont(crFont);
         const int y = versionBaseline + versionFm.descent() + 20;
         const int lineH = crFontSize + 4;
         pixPaint.setPen(QColor(37, 99, 235));
@@ -151,11 +164,12 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
 
     // draw additional text if special network
     if(!titleAddText.isEmpty()) {
-        QFont boldFont = QFont(font, 10*fontFactor);
+        QFont boldFont = baseFont;
+        boldFont.setPointSize(qMax(1, int(10 * fontFactor)));
         boldFont.setWeight(QFont::Bold);
         pixPaint.setFont(boldFont);
         fm = pixPaint.fontMetrics();
-        int titleAddTextWidth  = fm.width(titleAddText);
+        int titleAddTextWidth = fm.width(titleAddText);
         pixPaint.drawText(splashW - titleAddTextWidth - 10, 15, titleAddText);
     }
 
