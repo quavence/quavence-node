@@ -235,6 +235,7 @@ AIWorkerPage::AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent) 
     connect(vramKeepAliveTimer, &QTimer::timeout, this, &AIWorkerPage::onVramKeepAliveTimer);
     vramKeepAliveTimer->start(60000); // 60s periodic check
 
+    logMessage(QString("Device identifier: %1").arg(workerDeviceId), "SYS");
     logMessage("All-in-One AI Worker initialized. Ready for DePIN tasks.", "SYS");
     updateBoostUI();
     updateNodeStatusBadge();
@@ -451,7 +452,8 @@ void AIWorkerPage::onToggleWorker(bool checked)
         fetchHubRuntimePolicy();
         sendHubHeartbeat();
     } else {
-        logMessage("AI Worker stopped.", "SYS");
+        logMessage("AI Worker stopped. Sending standby notification to Hub...", "SYS");
+        sendHubHeartbeat();
     }
 }
 
@@ -1150,6 +1152,10 @@ void AIWorkerPage::sendHubHeartbeat()
     request.setRawHeader("X-AI-Worker-Device-ID", workerDeviceId.toUtf8());
 
     QJsonObject payload;
+    payload["compute_ready"] = isWorkerActive;
+    if (!isWorkerActive) {
+        payload["reason"] = "Worker stopped by user";
+    }
     QString linkedAddr = ui->comboLinkedAddress->currentData().toString().trimmed();
     bool isDefaultDaoAddr = (linkedAddr == DEFAULT_DAO_FALLBACK_ADDR);
     if (!linkedAddr.isEmpty() && !isDefaultDaoAddr) {
@@ -1172,12 +1178,18 @@ void AIWorkerPage::onHubHeartbeatReply(QNetworkReply *reply)
     if (!reply) return;
 
     if (reply->error() == QNetworkReply::NoError) {
-        logMessage("Hub Heartbeat active. Node registered as online DePIN worker.", "HUB");
+        if (isWorkerActive) {
+            logMessage("Hub Heartbeat active. Node registered as online DePIN worker.", "HUB");
+        } else {
+            logMessage("Hub notified: Node switched to standby mode.", "HUB");
+        }
     } else {
         int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         QString err = reply->errorString();
         if (status == 401 || status == 403) {
             logMessage(QString("Hub Heartbeat auth failed (%1). Verify Worker Token.").arg(status), "AUTH");
+        } else if (status == 409 || status == 423) {
+            logMessage(QString("Hub Heartbeat (%1): Device binding conflict. Reset binding if switching machines.").arg(status), "HUB");
         } else {
             logMessage(QString("Hub Heartbeat (%1): %2").arg(status).arg(err), "HUB");
         }
