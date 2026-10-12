@@ -106,29 +106,64 @@ bool CBanDB::Read(banmap_t& banSet)
         if (memcmp(pchMsgTmp, Params().MessageStart(), sizeof(pchMsgTmp)))
             return error("%s: Invalid network magic number", __func__);
 
-        // NEW-9 fix: detect banlist format version.
-        // New files (v15.1.4+) have a 0x02 marker byte after the magic.
-        // Old files go directly to the banSet compact-size. We peek at the
-        // next byte: if it is 0x02, consume it and keep CLIENT_VERSION so
-        // CSubNet reads the hasTorV3 flag. Otherwise, lower the stream
-        // version to 150103 (< BANLIST_WITH_TORFLAG_VERSION) so CSubNet
-        // skips the flag and reads legacy 33-byte records correctly.
-        {
-            uint8_t nBanFmt = 0;
-            if (!ssBanlist.empty()) {
-                nBanFmt = *reinterpret_cast<const uint8_t*>(&ssBanlist[0]);
-            }
-            if (nBanFmt == 0x02) {
-                ssBanlist >> nBanFmt;   // consume the marker byte
-                // stream stays at CLIENT_VERSION — hasTorV3 flag will be read
-            } else {
-                // Old format: no marker byte, no hasTorV3 flag.
-                ssBanlist.SetVersion(150103);
+        // Multi-candidate trial deserialization (NEW-12 remediation):
+        // Detects banlist format across all upgrade paths without false-positive collisions
+        // (such as legacy files having 2 entries colliding with 0x02 format marker).
+        bool fLoaded = false;
+        const CDataStream ssHeaderBackup = ssBanlist;
+
+        // Candidate 1: New format (v15.1.5+ with 0x02 format marker byte and Tor v3 flag)
+        if (!ssBanlist.empty() && static_cast<uint8_t>(ssBanlist[0]) == 0x02) {
+            try {
+                CDataStream ssTrial = ssHeaderBackup;
+                uint8_t nMarker = 0;
+                ssTrial >> nMarker; // Consume marker byte
+                banmap_t trialBans;
+                ssTrial >> trialBans;
+                if (ssTrial.empty()) {
+                    banSet = trialBans;
+                    fLoaded = true;
+                }
+            } catch (...) {
+                // Not a valid new-format stream with 0x02 marker (e.g. legacy file with 2 entries)
             }
         }
 
-        // de-serialize address data into one CAddrMan object
-        ssBanlist >> banSet;
+        // Candidate 2: Legacy format without marker (stream version 150103, no Tor v3 flag)
+        if (!fLoaded) {
+            try {
+                CDataStream ssTrial = ssHeaderBackup;
+                ssTrial.SetVersion(150103);
+                banmap_t trialBans;
+                ssTrial >> trialBans;
+                if (ssTrial.empty()) {
+                    banSet = trialBans;
+                    fLoaded = true;
+                }
+            } catch (...) {
+                // Legacy parse failed
+            }
+        }
+
+        // Candidate 3: Pre-fix v15.1.4 format (stream version 150104)
+        if (!fLoaded) {
+            try {
+                CDataStream ssTrial = ssHeaderBackup;
+                ssTrial.SetVersion(150104);
+                banmap_t trialBans;
+                ssTrial >> trialBans;
+                if (ssTrial.empty()) {
+                    banSet = trialBans;
+                    fLoaded = true;
+                }
+            } catch (...) {
+                // Legacy v15.1.4 parse failed
+            }
+        }
+
+        if (!fLoaded) {
+            return error("%s: Failed to deserialize banlist under any known format", __func__);
+        }
     }
     catch (const std::exception& e) {
         return error("%s: Deserialize or I/O error - %s", __func__, e.what());
