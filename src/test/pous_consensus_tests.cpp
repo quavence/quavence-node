@@ -29,7 +29,7 @@
 #include <set>
 #include <vector>
 
-BOOST_FIXTURE_TEST_SUITE(audit4_node_tests, BasicTestingSetup)
+BOOST_FIXTURE_TEST_SUITE(pous_consensus_tests, BasicTestingSetup)
 
 // ============================================================================
 // Vector 1 (PUB-04): Stake-Boost Inflation via Multi-Output QVRE and Mitigation

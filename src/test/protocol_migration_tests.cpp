@@ -1,4 +1,4 @@
-// Independent re-audit of the QV-2026-002 / QV-2026-003 fixes (v15.1.2).
+// Protocol migration, legacy peer compatibility and consensus invariants verification suite.
 #include "airegistry.h"
 #include "chainparams.h"
 #include "clientversion.h"
@@ -19,7 +19,7 @@
 
 #include <boost/test/unit_test.hpp>
 
-BOOST_FIXTURE_TEST_SUITE(audit2_tests, BasicTestingSetup)
+BOOST_FIXTURE_TEST_SUITE(protocol_migration_tests, BasicTestingSetup)
 
 static const char* SEED =
     "kalwfcd7ia3gcwksq7yipu3b2lseibic6ytmawkbvq7odlleic6lifqd.onion";

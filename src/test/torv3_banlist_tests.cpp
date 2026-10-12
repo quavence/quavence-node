@@ -1,4 +1,4 @@
-// Independent audit 4 — regressions introduced by the NEW-6 fix (757fc753e).
+// Tor v3 subnet and banlist roundtrip verification suite.
 #include "addrdb.h"
 #include "chainparams.h"
 #include "clientversion.h"
@@ -13,7 +13,7 @@
 #include <boost/test/unit_test.hpp>
 #include <map>
 
-BOOST_FIXTURE_TEST_SUITE(audit4_tests, BasicTestingSetup)
+BOOST_FIXTURE_TEST_SUITE(torv3_banlist_tests, BasicTestingSetup)
 
 static const char* V3SEED =
     "kalwfcd7ia3gcwksq7yipu3b2lseibic6ytmawkbvq7odlleic6lifqd.onion";
