@@ -21,7 +21,7 @@ static const char* V3SEED =
 static const char* V2SEED = "6zeveij73qxcmfie.onion";
 
 // ---------------------------------------------------------------------------
-// The NEW-6 fix itself: distinct identities must no longer collide.
+// Tor v3 identity isolation: distinct identities must no longer collide.
 // ---------------------------------------------------------------------------
 static CNetAddr MakeCollidingAddr(const CNetAddr& v3)
 {
@@ -46,7 +46,7 @@ BOOST_AUTO_TEST_CASE(new6_collision_is_fixed)
     BOOST_REQUIRE(v3.SetSpecial(V3SEED));
     CNetAddr spoof = MakeCollidingAddr(v3);
 
-    BOOST_CHECK_MESSAGE(!(spoof == v3), "NEW-6 must no longer compare equal");
+    BOOST_CHECK_MESSAGE(!(spoof == v3), "Distinct onion identities must no longer compare equal");
     BOOST_CHECK_MESSAGE((spoof < v3) || (v3 < spoof), "must be order-distinct");
 
     std::map<CNetAddr, int> m;
@@ -63,7 +63,7 @@ BOOST_AUTO_TEST_CASE(new6_collision_is_fixed)
 }
 
 // ---------------------------------------------------------------------------
-// NEW-9: CSubNet's new read path decides whether a 32-byte Tor v3 key follows
+// Tor v3 subnet deserialization: CSubNet's read path decides whether a 32-byte Tor v3 key follows
 // by testing `network.IsTor() && s.size() >= 32`. IsTor() is true for ANY
 // OnionCat-range address (Tor v2 included), but the WRITE path only emits the
 // key when IsTorV3(). So a v2/OnionCat subnet followed by >=32 bytes makes the
@@ -98,10 +98,10 @@ BOOST_AUTO_TEST_CASE(subnet_torv2_desyncs_the_stream)
 
     BOOST_CHECK_MESSAGE(!threw, "reading a Tor v2 subnet must not throw");
     BOOST_CHECK_MESSAGE(consumedByRead == subnetBytes,
-        "NEW-9: the reader consumed MORE than was written for a Tor v2 subnet - "
+        "Tor v3 subnet deserialization: the reader consumed MORE than was written for a Tor v2 subnet - "
         "it ate bytes belonging to the next record, desyncing banlist.dat");
     BOOST_CHECK_MESSAGE(ss.size() == 64,
-        "NEW-9: the trailing record was corrupted by the over-read");
+        "Tor v3 subnet deserialization: the trailing record was corrupted by the over-read");
 }
 
 // A Tor v3 subnet written as the LAST record, with fewer than 32 trailing bytes,
@@ -126,7 +126,7 @@ BOOST_AUTO_TEST_CASE(subnet_torv3_last_record_loses_key)
         BOOST_TEST_MESSAGE(std::string("still matches the v3 peer = ") +
                            (back.Match(v3) ? "YES" : "NO"));
         BOOST_CHECK_MESSAGE(back.Match(v3),
-            "NEW-9: a Tor v3 ban stored as the final record loses its key and "
+            "Tor v3 subnet deserialization: a Tor v3 ban stored as the final record loses its key and "
             "silently stops matching the banned peer");
     }
 }
@@ -158,14 +158,14 @@ BOOST_AUTO_TEST_CASE(banlist_multi_entry_roundtrip)
     BOOST_TEST_MESSAGE("read back  = " + std::to_string(back.size()) +
                        " entries, leftover=" + std::to_string(ss.size()));
 
-    BOOST_CHECK_MESSAGE(!threw, "NEW-9: a mixed banlist fails to deserialize");
+    BOOST_CHECK_MESSAGE(!threw, "Tor v3 subnet deserialization: a mixed banlist fails to deserialize");
     BOOST_CHECK_MESSAGE(back.size() == out.size(),
-        "NEW-9: entries were lost or merged on reload");
-    BOOST_CHECK_MESSAGE(ss.size() == 0, "NEW-9: bytes left over -> stream desync");
+        "Tor v3 subnet deserialization: entries were lost or merged on reload");
+    BOOST_CHECK_MESSAGE(ss.size() == 0, "Tor v3 subnet deserialization: bytes left over -> stream desync");
 }
 
 // ---------------------------------------------------------------------------
-// NEW-10: CSubNet::Match now requires exact v3 key equality whenever EITHER
+// Tor v3 subnet match invariant: CSubNet::Match requires exact v3 key equality whenever EITHER
 // side is v3. A range ban covering the OnionCat space therefore no longer
 // matches any Tor v3 peer.
 // ---------------------------------------------------------------------------
@@ -183,7 +183,7 @@ BOOST_AUTO_TEST_CASE(range_ban_no_longer_covers_torv3)
     BOOST_TEST_MESSAGE(std::string("covers the v3 peer = ") + (matches ? "YES" : "NO"));
 
     BOOST_CHECK_MESSAGE(matches,
-        "NEW-10: a subnet/range ban no longer matches Tor v3 peers, so v3 nodes "
+        "Tor v3 subnet match invariant: a subnet/range ban no longer matches Tor v3 peers, so v3 nodes "
         "cannot be blocked by range - only by exact onion key");
 }
 
@@ -223,12 +223,12 @@ BOOST_AUTO_TEST_CASE(banlist_v2_entry_corrupts_following_entries)
     }
 
     BOOST_CHECK_MESSAGE(!threw,
-        "NEW-9: a banlist whose first entry is a Tor v2 subnet fails to parse");
+        "Tor v3 subnet deserialization: a banlist whose first entry is a Tor v2 subnet fails to parse");
     if (!threw) {
         BOOST_CHECK_MESSAGE(s2.ToString() == "203.0.113.7/32",
-            "NEW-9: the entry AFTER the Tor v2 subnet was corrupted by the 32-byte over-read");
+            "Tor v3 subnet deserialization: the entry AFTER the Tor v2 subnet was corrupted by the 32-byte over-read");
         BOOST_CHECK_MESSAGE(ss.size() == 0,
-            "NEW-9: stream desynced - bytes left over after reading all records");
+            "Tor v3 subnet deserialization: stream desynced - bytes left over after reading all records");
     }
 }
 

@@ -32,7 +32,7 @@ static const char* V3SEED =
 static const unsigned char ONIONCAT[6] = {0xFD,0x87,0xD8,0x7E,0xEB,0x43};
 
 // ---------------------------------------------------------------------------
-// NEW-6 candidate: the reworked operator== / operator< compare the 32-byte v3
+// Tor v3 identity isolation: the reworked operator== / operator< compare the 32-byte v3
 // key ONLY when BOTH sides are v3. A non-v3 CNetAddr carrying the same 16-byte
 // `ip` therefore compares EQUAL to a Tor v3 address.
 //
@@ -75,10 +75,10 @@ BOOST_AUTO_TEST_CASE(torv3_collides_with_nonv3_same_ip)
     BOOST_TEST_MESSAGE(std::string("equivalent ordering : ") + (ordersEq ? "YES" : "no"));
 
     BOOST_CHECK_MESSAGE(!equal,
-        "NEW-6: a non-v3 address with a matching 16-byte ip compares EQUAL to a "
+        "Tor v3 identity isolation: a non-v3 address with a matching 16-byte ip compares EQUAL to a "
         "Tor v3 address; distinct network identities must never compare equal");
     BOOST_CHECK_MESSAGE(!ordersEq,
-        "NEW-6: spoof and the real v3 address are order-equivalent, so they "
+        "Tor v3 identity isolation: spoof and the real v3 address are order-equivalent, so they "
         "collide as a single key in addrman/banlist containers");
 }
 
@@ -108,7 +108,7 @@ BOOST_AUTO_TEST_CASE(torv3_collision_squats_map_slot)
     BOOST_TEST_MESSAGE("value stored under the real v3 key   = " + std::to_string(m[v3]));
 
     BOOST_CHECK_MESSAGE(m.size() == 2,
-        "NEW-6: the attacker's address overwrote the real Tor v3 peer's map entry "
+        "Tor v3 identity isolation: the attacker's address overwrote the real Tor v3 peer's map entry "
         "(addrman slot squatting / eclipse primitive)");
 }
 
@@ -137,7 +137,7 @@ BOOST_AUTO_TEST_CASE(subnet_torv3_ban_roundtrip)
 }
 
 // ---------------------------------------------------------------------------
-// NEW-3: SIGHASH_ALL is now required. Confirm the permissive-hashtype replay is
+// SIGHASH invariant: SIGHASH_ALL is strictly required. Confirm the permissive-hashtype replay is
 // rejected, and that a REAL mainnet attestation is still accepted.
 // ---------------------------------------------------------------------------
 static const char* LIVE_QVAI_TX_4725 =
@@ -209,7 +209,7 @@ BOOST_AUTO_TEST_CASE(permissive_hashtype_now_rejected)
 
     bool accepted = IsValidPoUSRewardTx(CTransaction(evil), 100);
     BOOST_TEST_MESSAGE(std::string("NONE|ANYONECANPAY replay accepted = ") + (accepted ? "YES" : "no"));
-    BOOST_CHECK_MESSAGE(!accepted, "NEW-3 should reject non-SIGHASH_ALL authorization");
+    BOOST_CHECK_MESSAGE(!accepted, "SIGHASH invariant rejects non-SIGHASH_ALL authorization");
 }
 
 
@@ -246,7 +246,7 @@ BOOST_AUTO_TEST_CASE(ban_poisoning_via_collision)
     BOOST_TEST_MESSAGE(std::string("also bans the honest v3 peer = ") + (hitsVictim ? "YES" : "no"));
 
     BOOST_CHECK_MESSAGE(!hitsVictim,
-        "NEW-6: banning the attacker's crafted address also bans the honest Tor v3 "
+        "Tor v3 identity isolation: banning the attacker's crafted address also bans the honest Tor v3 "
         "peer -- a remote DoS that evicts any chosen onion node");
 }
 
@@ -275,7 +275,7 @@ BOOST_AUTO_TEST_CASE(addrman_slot_squat_real)
     BOOST_TEST_MESSAGE("addrman size after real v3   = " + std::to_string(afterReal));
     BOOST_TEST_MESSAGE("addrman size after spoof add = " + std::to_string(afterSpoof));
     BOOST_CHECK_MESSAGE(afterSpoof == afterReal + 1,
-        "NEW-6: the colliding address was absorbed into the Tor v3 peer's addrman "
+        "Tor v3 identity isolation: the colliding address was absorbed into the Tor v3 peer's addrman "
         "entry instead of being stored separately");
 }
 
