@@ -232,4 +232,70 @@ BOOST_AUTO_TEST_CASE(banlist_v2_entry_corrupts_following_entries)
     }
 }
 
+
+// ---------------------------------------------------------------------------
+// Banlist upgrade robustness (NEW-12 remediation):
+// Verifies that a legacy banlist with EXACTLY 2 entries (where compact-size
+// writes 0x02 as the count) is not misidentified as a new-format marker.
+// ---------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(legacy_banlist_2_entries_upgrade_collision_remediated)
+{
+    banmap_t legacyBans;
+    CNetAddr ip1, ip2;
+    BOOST_REQUIRE(LookupHost("192.0.2.1", ip1, false));
+    BOOST_REQUIRE(LookupHost("192.0.2.2", ip2, false));
+    CBanEntry e1(1789000000); e1.nBanUntil = 1789999999;
+    CBanEntry e2(1789000001); e2.nBanUntil = 1789999998;
+    legacyBans[CSubNet(ip1)] = e1;
+    legacyBans[CSubNet(ip2)] = e2;
+
+    // Serialize as legacy banlist (magic + banmap_t directly, NO 0x02 marker)
+    CDataStream ssLegacy(SER_DISK, 150103);
+    ssLegacy << FLATDATA(Params().MessageStart());
+    ssLegacy << legacyBans;
+    uint256 hash = Hash(ssLegacy.begin(), ssLegacy.end());
+    ssLegacy << hash;
+
+    // Write to GetDataDir() / banlist.dat
+    boost::filesystem::path banPath = GetDataDir() / "banlist.dat";
+    {
+        FILE *file = fopen(banPath.string().c_str(), "wb");
+        BOOST_REQUIRE(file != nullptr);
+        CAutoFile fileout(file, SER_DISK, CLIENT_VERSION);
+        fileout << ssLegacy;
+        FileCommit(fileout.Get());
+        fileout.fclose();
+    }
+
+    // Read back through CBanDB::Read
+    CBanDB bandb;
+    banmap_t loadedBans;
+    bool readSuccess = bandb.Read(loadedBans);
+    BOOST_CHECK_MESSAGE(readSuccess, "CBanDB::Read must succeed for legacy 2-entry banlist");
+    BOOST_CHECK_EQUAL(loadedBans.size(), 2u);
+    BOOST_CHECK(loadedBans.count(CSubNet(ip1)) == 1);
+    BOOST_CHECK(loadedBans.count(CSubNet(ip2)) == 1);
+}
+
+BOOST_AUTO_TEST_CASE(current_banlist_2_entries_roundtrip)
+{
+    banmap_t bans;
+    CNetAddr ip1, ip2;
+    BOOST_REQUIRE(LookupHost("198.51.100.1", ip1, false));
+    BOOST_REQUIRE(LookupHost("198.51.100.2", ip2, false));
+    CBanEntry e1(1789000010); e1.nBanUntil = 1789999999;
+    CBanEntry e2(1789000011); e2.nBanUntil = 1789999998;
+    bans[CSubNet(ip1)] = e1;
+    bans[CSubNet(ip2)] = e2;
+
+    CBanDB bandb;
+    BOOST_REQUIRE(bandb.Write(bans));
+
+    banmap_t loadedBans;
+    BOOST_REQUIRE(bandb.Read(loadedBans));
+    BOOST_CHECK_EQUAL(loadedBans.size(), 2u);
+    BOOST_CHECK(loadedBans.count(CSubNet(ip1)) == 1);
+    BOOST_CHECK(loadedBans.count(CSubNet(ip2)) == 1);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

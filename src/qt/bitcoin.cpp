@@ -558,6 +558,15 @@ int main(int argc, char *argv[])
     QApplication::setAttribute(Qt::AA_DontShowIconsInMenus);
 #endif
 
+#if !defined(WIN32) && !defined(MAC_OSX)
+    // Force generic/fusion platform theme to prevent host desktop theme plugin conflicts
+    // (such as Cinnamon or GTK theme allocator mismatch causing glibc heap corruption).
+    qputenv("QT_QPA_PLATFORMTHEME", "generic");
+    if (!qEnvironmentVariableIsSet("QT_STYLE_OVERRIDE")) {
+        qputenv("QT_STYLE_OVERRIDE", "fusion");
+    }
+#endif
+
     BitcoinApplication app(argc, argv);
     GUIUtil::InitBrandPalette();
 

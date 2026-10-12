@@ -599,10 +599,6 @@ void AIWorkerPage::updateBoostUI()
     int effectiveCount = std::max(attestationCount, (int)onChainCredits);
     int effectiveBoost = GetWorkerPoUSBoost((uint32_t)effectiveCount);
 
-    if (effectiveBoost == 0 && isWorkerActive) {
-        effectiveBoost = 20;
-    }
-
     currentBoostPercent = effectiveBoost;
 
     ui->labelBoostValue->setText(QString("+%1%").arg(currentBoostPercent));
