@@ -18,7 +18,7 @@
 
 #include <boost/test/unit_test.hpp>
 
-BOOST_FIXTURE_TEST_SUITE(pous_auth_bypass_tests, BasicTestingSetup)
+BOOST_FIXTURE_TEST_SUITE(pous_authorization_tests, BasicTestingSetup)
 
 BOOST_AUTO_TEST_CASE(pous_authorization_bypass_regression_test)
 {

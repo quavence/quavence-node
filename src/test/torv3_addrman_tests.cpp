@@ -1,5 +1,4 @@
-// Independent audit 3 of v15.1.3 (NEW-1 / NEW-3 / NEW-4 fixes).
-// Focus: regressions introduced BY the fixes.
+// Tor v3 address manager isolation, slot allocation and attestation rules verification suite.
 #include "airegistry.h"
 #include "addrman.h"
 #include "base58.h"
@@ -24,7 +23,7 @@
 #include <map>
 #include <set>
 
-BOOST_FIXTURE_TEST_SUITE(audit3_tests, BasicTestingSetup)
+BOOST_FIXTURE_TEST_SUITE(torv3_addrman_tests, BasicTestingSetup)
 
 static const char* V3SEED =
     "kalwfcd7ia3gcwksq7yipu3b2lseibic6ytmawkbvq7odlleic6lifqd.onion";
