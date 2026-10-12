@@ -43,16 +43,16 @@ bool StartEmbeddedTor()
 #ifndef WIN32
     return false;
 #else
-    // 1. Проверка явного отключения
+    // 1. Explicit disable check
     if (GetBoolArg("-notor", false) || !GetBoolArg("-embeddedtor", true)) {
         LogPrintf("embedded tor: disabled by -notor or -embeddedtor=0\n");
         return false;
     }
 
-    // 2. Корректный fallback на внешний Tor, если он запущен в системе
+    // 2. Fallback to external Tor if already running on the host system
     if (IsPortListening(9051) || IsPortListening(9050)) {
         LogPrintf("embedded tor: external Tor detected on 127.0.0.1:9051/9050; configuring external Tor proxy\n");
-        // Явно конфигурируем параметры внешнего Tor, чтобы нода не потеряла связь с .onion
+        // Explicitly configure external Tor parameters so node retains .onion reachability
         mapArgs["-onion"] = "127.0.0.1:9050";
         mapArgs["-torcontrol"] = "127.0.0.1:9051";
         return false;
