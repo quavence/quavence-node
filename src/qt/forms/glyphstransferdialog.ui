@@ -87,7 +87,7 @@
    <item>
     <widget class="QLabel" name="labelHeader">
      <property name="text">
-      <string>&lt;html&gt;&lt;body&gt;&lt;h3 style=&quot;margin:0; color:#0f172a;&quot;&gt;💎 Safe Transfer PoUS Glyph&lt;/h3&gt;&lt;span style=&quot;color:#64748b; font-size:12px;&quot;&gt;Atomic on-chain relocation of Glyph Carrier UTXO with OP_RETURN payload&lt;/span&gt;&lt;/body&gt;&lt;/html&gt;</string>
+      <string>&lt;html&gt;&lt;body&gt;&lt;h3 style=&quot;margin:0; color:#0f172a;&quot;&gt;Safe Transfer PoUS Glyph&lt;/h3&gt;&lt;span style=&quot;color:#64748b; font-size:12px;&quot;&gt;Atomic on-chain relocation of Glyph Carrier UTXO with OP_RETURN payload&lt;/span&gt;&lt;/body&gt;&lt;/html&gt;</string>
      </property>
     </widget>
    </item>
@@ -172,7 +172,7 @@
         <item>
          <widget class="QLineEdit" name="lineEditRecipient">
           <property name="placeholderText">
-           <string>Enter recipient Quavence address (Q...)</string>
+           <string>Enter recipient Quavence address (S...)</string>
           </property>
          </widget>
         </item>
@@ -201,11 +201,10 @@
     <widget class="QFrame" name="frameInfo">
      <property name="styleSheet">
       <string notr="true">
-       QFrame {
-           background-color: #f0fdf4;
-           border: 1px solid #bbf7d0;
-           border-radius: 6px;
-           padding: 8px 12px;
+       QFrame#frameInfo {
+           background-color: transparent;
+           border: none;
+           padding: 2px 4px;
        }
       </string>
      </property>
@@ -219,7 +218,7 @@
          <bool>true</bool>
         </property>
         <property name="text">
-         <string>&lt;span style=&quot;color:#166534; font-size:11px;&quot;&gt;&lt;b&gt;PoUS Protocol Guarantee:&lt;/b&gt; This wizard safely unlocks the 10,000 sat carrier UTXO for this specific transaction, appends the genuine 40-byte OP_RETURN cryptographic transfer payload (QVNC v1 TRANSFER), and funds the standard network transaction fee (~0.0001 QVNC) from other wallet coins.&lt;/span&gt;</string>
+         <string>&lt;span style=&quot;color:#64748b; font-size:11px; line-height:1.4;&quot;&gt;Unlocks Carrier UTXO with 40-byte OP_RETURN transfer payload (QVNC v1 TRANSFER). Network fee (~0.0001 QVNC) is funded from wallet coins.&lt;/span&gt;</string>
         </property>
        </widget>
       </item>

@@ -143,7 +143,10 @@ AIWorkerPage::AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent) 
     currentStreamSeq(1),
     isStreamFlushing(false),
     isStreamFinishing(false),
-    currentTaskToolChoice(QJsonValue::Undefined)
+    currentTaskToolChoice(QJsonValue::Undefined),
+    streamBatchTimer(new QTimer(this)),
+    vramKeepAliveTimer(new QTimer(this)),
+    lastTaskExecutedTimeMs(QDateTime::currentMSecsSinceEpoch())
 {
     EnsureSslCertificatesLoaded();
     ui->setupUi(this);
@@ -225,6 +228,12 @@ AIWorkerPage::AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent) 
 
     heartbeatDebounceTimer->setSingleShot(true);
     connect(heartbeatDebounceTimer, &QTimer::timeout, this, &AIWorkerPage::sendHubHeartbeat);
+
+    streamBatchTimer->setSingleShot(true);
+    connect(streamBatchTimer, &QTimer::timeout, this, &AIWorkerPage::flushStreamQueue);
+
+    connect(vramKeepAliveTimer, &QTimer::timeout, this, &AIWorkerPage::onVramKeepAliveTimer);
+    vramKeepAliveTimer->start(60000); // 60s periodic check
 
     logMessage("All-in-One AI Worker initialized. Ready for DePIN tasks.", "SYS");
     updateBoostUI();
@@ -1183,6 +1192,34 @@ void AIWorkerPage::onClaimPollTimer()
     }
 }
 
+void AIWorkerPage::onVramKeepAliveTimer()
+{
+    if (!isWorkerActive || isTaskRunning) {
+        return;
+    }
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (now - lastTaskExecutedTimeMs < 240000) { // 4 minutes
+        return;
+    }
+
+    lastTaskExecutedTimeMs = now;
+    QString baseUrl = getSelectedEndpointUrl();
+    QString modelsUrl = baseUrl.endsWith("/v1") ? baseUrl + "/models" : baseUrl + "/v1/models";
+    QNetworkRequest request(modelsUrl);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    QNetworkReply *reply = networkManager->get(request);
+    // 3s watchdog timeout on VRAM keep-alive probe
+    QPointer<QNetworkReply> probeReplyPtr(reply);
+    QTimer::singleShot(3000, reply, [probeReplyPtr]() {
+        if (probeReplyPtr && probeReplyPtr->isRunning()) {
+            probeReplyPtr->abort();
+        }
+    });
+    connect(reply, &QNetworkReply::finished, this, [reply]() {
+        reply->deleteLater();
+    });
+}
+
 QJsonObject AIWorkerPage::buildRuntimeAttestation() const
 {
     QJsonObject attestation;
@@ -1291,6 +1328,7 @@ void AIWorkerPage::dispatchTask(const QString &taskId, const QString &taskType,
         return;
     }
     isTaskRunning = true;
+    lastTaskExecutedTimeMs = QDateTime::currentMSecsSinceEpoch();
     currentTaskId = taskId;
     currentTaskType = taskType;
     currentClaimNonce = claimNonce;
@@ -1541,6 +1579,9 @@ void AIWorkerPage::executeEmbeddingInference(const QJsonObject &resultJson)
 
 void AIWorkerPage::flushStreamQueue()
 {
+    if (streamBatchTimer && streamBatchTimer->isActive()) {
+        streamBatchTimer->stop();
+    }
     if (isStreamFlushing) {
         return;
     }
@@ -1596,6 +1637,13 @@ void AIWorkerPage::flushStreamQueue()
 
     QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
     QNetworkReply *reply = networkManager->post(request, body);
+    // 10s watchdog timeout on stream chunk relay
+    QPointer<QNetworkReply> streamReplyPtr(reply);
+    QTimer::singleShot(10000, reply, [streamReplyPtr]() {
+        if (streamReplyPtr && streamReplyPtr->isRunning()) {
+            streamReplyPtr->abort();
+        }
+    });
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
         isStreamFlushing = false;
@@ -1649,7 +1697,13 @@ void AIWorkerPage::onInferenceReadyRead(QNetworkReply *reply)
         QString line = QString::fromUtf8(lineBytes);
         if (line.startsWith("data:")) {
             QString dataStr = line.mid(5).trimmed();
-            if (dataStr == "[DONE]") continue;
+            if (dataStr == "[DONE]") {
+                if (streamBatchTimer && streamBatchTimer->isActive()) {
+                    streamBatchTimer->stop();
+                }
+                flushStreamQueue();
+                continue;
+            }
 
             QJsonDocument chunkDoc = QJsonDocument::fromJson(dataStr.toUtf8());
             if (chunkDoc.isObject()) {
@@ -1679,7 +1733,9 @@ void AIWorkerPage::onInferenceReadyRead(QNetworkReply *reply)
                                 }
                             }
                             if (!pendingStreamDeltas.isEmpty() || !pendingStreamToolCallsFrames.isEmpty()) {
-                                flushStreamQueue();
+                                if (!isStreamFlushing && streamBatchTimer && !streamBatchTimer->isActive()) {
+                                    streamBatchTimer->start(200);
+                                }
                             }
                         }
                     }
@@ -1745,6 +1801,9 @@ void AIWorkerPage::executeInference(const QString &systemPrompt, const QString &
         isStreamFlushing = false;
         isStreamFinishing = false;
         pendingFinishOutputText.clear();
+        if (streamBatchTimer && streamBatchTimer->isActive()) {
+            streamBatchTimer->stop();
+        }
         logMessage(QString("Starting streaming inference for task %1 (relay active)...").arg(currentTaskId), "AI");
     }
 
@@ -1774,6 +1833,11 @@ void AIWorkerPage::executeInference(const QString &systemPrompt, const QString &
 
 void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
 {
+    if (streamBatchTimer && streamBatchTimer->isActive()) {
+        streamBatchTimer->stop();
+    }
+    lastTaskExecutedTimeMs = QDateTime::currentMSecsSinceEpoch();
+
     if (!reply) {
         isTaskRunning = false;
         currentTaskIsControl = false;
