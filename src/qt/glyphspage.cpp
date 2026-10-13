@@ -101,7 +101,6 @@ GlyphsPage::GlyphsPage(const PlatformStyle *_platformStyle, QWidget *parent) :
     connect(ui->btnExplorerAll, SIGNAL(clicked()), this, SLOT(onExplorerClicked()));
     connect(ui->btnEmptyExplorer, SIGNAL(clicked()), this, SLOT(onExplorerClicked()));
     connect(ui->btnTransfer, SIGNAL(clicked()), this, SLOT(onTransferClicked()));
-    connect(ui->btnExplorerRow, SIGNAL(clicked()), this, SLOT(onExplorerClicked()));
     connect(ui->btnCopyHash, SIGNAL(clicked()), this, SLOT(onCopyHashClicked()));
     connect(ui->btnCopyAddress, SIGNAL(clicked()), this, SLOT(onCopyAddressClicked()));
     connect(ui->tableGlyphs, SIGNAL(itemSelectionChanged()), this, SLOT(onTableSelectionChanged()));
@@ -444,7 +443,6 @@ void GlyphsPage::updateSelectionState()
     int row = ui->tableGlyphs->currentRow();
     bool hasSelection = (row >= 0 && row < (int)currentGlyphs.size());
     ui->btnTransfer->setEnabled(hasSelection);
-    ui->btnExplorerRow->setEnabled(hasSelection);
     ui->btnViewOnExplorer->setEnabled(hasSelection);
     ui->btnCopyHash->setEnabled(hasSelection);
     ui->btnCopyAddress->setEnabled(hasSelection);

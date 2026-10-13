@@ -710,16 +710,6 @@
           </widget>
          </item>
          <item>
-          <widget class="QPushButton" name="btnExplorerRow">
-           <property name="enabled">
-            <bool>false</bool>
-           </property>
-           <property name="text">
-            <string>View in Explorer</string>
-           </property>
-          </widget>
-         </item>
-         <item>
           <widget class="QPushButton" name="btnCopyHash">
            <property name="enabled">
             <bool>false</bool>
