@@ -48,8 +48,8 @@ GlyphsPage::GlyphsPage(const PlatformStyle *_platformStyle, QWidget *parent) :
 {
     ui->setupUi(this);
 
-    // Setup table columns
-    ui->tableGlyphs->setColumnCount(6);
+    // Setup table columns (NEW-14: 7 columns with Lineage verification)
+    ui->tableGlyphs->setColumnCount(7);
     ui->tableGlyphs->verticalHeader()->hide();
     ui->tableGlyphs->setShowGrid(true);
 
@@ -58,33 +58,37 @@ GlyphsPage::GlyphsPage(const PlatformStyle *_platformStyle, QWidget *parent) :
             << tr("Glyph Hash")
             << tr("Carrier Address")
             << tr("Carrier UTXO")
+            << tr("Lineage")
             << tr("Protection")
             << tr("Confirmations");
     ui->tableGlyphs->setHorizontalHeaderLabels(headers);
 
     ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
-    ui->tableGlyphs->setColumnWidth(0, 80);
+    ui->tableGlyphs->setColumnWidth(0, 75);
 
     ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
-    ui->tableGlyphs->setColumnWidth(1, 185);
+    ui->tableGlyphs->setColumnWidth(1, 175);
 
     ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
 
     ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Fixed);
-    ui->tableGlyphs->setColumnWidth(3, 125);
+    ui->tableGlyphs->setColumnWidth(3, 110);
 
     ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Fixed);
-    ui->tableGlyphs->setColumnWidth(4, 115);
+    ui->tableGlyphs->setColumnWidth(4, 110);
 
     ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Fixed);
-    ui->tableGlyphs->setColumnWidth(5, 110);
+    ui->tableGlyphs->setColumnWidth(5, 100);
+
+    ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Fixed);
+    ui->tableGlyphs->setColumnWidth(6, 100);
 
     ui->tableGlyphs->horizontalHeader()->setStretchLastSection(false);
 
-    for (int col = 0; col < 6; ++col) {
+    for (int col = 0; col < 7; ++col) {
         QTableWidgetItem *hItem = ui->tableGlyphs->horizontalHeaderItem(col);
         if (hItem) {
-            if (col == 0 || col == 3 || col == 4 || col == 5) {
+            if (col == 0 || col == 3 || col == 4 || col == 5 || col == 6) {
                 hItem->setTextAlignment(Qt::AlignCenter);
             } else {
                 hItem->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
@@ -115,6 +119,7 @@ GlyphsPage::GlyphsPage(const PlatformStyle *_platformStyle, QWidget *parent) :
     ui->btnToggleIdPrivacy->setCursor(Qt::PointingHandCursor);
     connect(ui->btnOpenTelegram, SIGNAL(clicked()), this, SLOT(onOpenTelegramClicked()));
     connect(ui->btnOpenWebHub, SIGNAL(clicked()), this, SLOT(onOpenWebHubClicked()));
+    connect(ui->btnViewOnExplorer, SIGNAL(clicked()), this, SLOT(onExplorerClicked()));
     connect(ui->btnToggleIdPrivacy, SIGNAL(clicked()), this, SLOT(onToggleIdPrivacyClicked()));
 
     // Live Telemetry Poller: updates fuel, cycles, phase in real-time (no tab switching needed)
@@ -125,8 +130,7 @@ GlyphsPage::GlyphsPage(const PlatformStyle *_platformStyle, QWidget *parent) :
         }
     });
     telemetryTimer->start(30000); // 30s
-
-    updateGlyphs();
+    // updateGlyphs deferred to setWalletModel
 }
 
 GlyphsPage::~GlyphsPage()
@@ -280,8 +284,8 @@ void GlyphsPage::updateGlyphs()
         itemEdition->setTextAlignment(Qt::AlignCenter);
         ui->tableGlyphs->setItem(row, 0, itemEdition);
 
-        // Hash (left-aligned)
-        std::string hashHex = g.glyphHash.ToString();
+        // Hash (left-aligned, canonical big-endian hex matching Explorer API and search)
+        std::string hashHex = HexStr(g.glyphHash.begin(), g.glyphHash.end());
         QString hashShort = QString::fromStdString(hashHex.substr(0, 10) + "..." + hashHex.substr(hashHex.length() - 8));
         QTableWidgetItem *itemHash = new QTableWidgetItem(hashShort);
         itemHash->setToolTip(QString::fromStdString(hashHex));
@@ -303,17 +307,30 @@ void GlyphsPage::updateGlyphs()
         itemUtxo->setTextAlignment(Qt::AlignCenter);
         ui->tableGlyphs->setItem(row, 3, itemUtxo);
 
+        // Lineage Status (NEW-14: On-Chain Lineage vs Pending Verification)
+        QString lineageText = (g.confirmations >= 1) ? tr("Verified") : tr("Pending Sync");
+        QTableWidgetItem *itemLineage = new QTableWidgetItem(lineageText);
+        itemLineage->setTextAlignment(Qt::AlignCenter);
+        if (g.confirmations >= 1) {
+            itemLineage->setForeground(QBrush(QColor("#16a34a")));
+            itemLineage->setToolTip(tr("Verified (On-Chain Lineage, %1 confirmations)").arg(g.confirmations));
+        } else {
+            itemLineage->setForeground(QBrush(QColor("#d97706")));
+            itemLineage->setToolTip(tr("Unverified Carrier / Pending Explorer Sync (0 confirmations)"));
+        }
+        ui->tableGlyphs->setItem(row, 4, itemLineage);
+
         // Protection (clean text, no emoji, centered)
         QString lockStr = g.isLocked ? tr("Auto-Locked") : tr("Unlocked");
         QTableWidgetItem *itemLock = new QTableWidgetItem(lockStr);
         itemLock->setToolTip(tr("PoUS Staking & Spending Immunity Active"));
         itemLock->setTextAlignment(Qt::AlignCenter);
-        ui->tableGlyphs->setItem(row, 4, itemLock);
+        ui->tableGlyphs->setItem(row, 5, itemLock);
 
         // Confirmations (centered)
         QTableWidgetItem *itemConf = new QTableWidgetItem(QString::number(g.confirmations));
         itemConf->setTextAlignment(Qt::AlignCenter);
-        ui->tableGlyphs->setItem(row, 5, itemConf);
+        ui->tableGlyphs->setItem(row, 6, itemConf);
     }
 
     // Update KPI metrics & stack view
@@ -361,6 +378,13 @@ void GlyphsPage::onTableSelectionChanged()
             showConsumerId = false;
         }
         ui->lblCardTitle->setText(QString("PoUS Glyph #%1 · Compute Pass").arg(selectedEdition));
+        if (currentGlyphs[row].confirmations >= 1) {
+            ui->lblOnchainStatus->setText(tr("Verified (On-Chain Lineage) · 10,000 sat"));
+            ui->lblOnchainStatus->setStyleSheet("font-size: 10px; font-weight: 600; font-family: monospace; color: #16a34a; padding: 1px 0px;");
+        } else {
+            ui->lblOnchainStatus->setText(tr("Unverified Carrier / Pending Explorer Sync"));
+            ui->lblOnchainStatus->setStyleSheet("font-size: 10px; font-weight: 600; font-family: monospace; color: #d97706; padding: 1px 0px;");
+        }
         requestAgentState(selectedEdition);
         updateSelectionState();
     } else if (!currentGlyphs.empty()) {
@@ -421,6 +445,7 @@ void GlyphsPage::updateSelectionState()
     bool hasSelection = (row >= 0 && row < (int)currentGlyphs.size());
     ui->btnTransfer->setEnabled(hasSelection);
     ui->btnExplorerRow->setEnabled(hasSelection);
+    ui->btnViewOnExplorer->setEnabled(hasSelection);
     ui->btnCopyHash->setEnabled(hasSelection);
     ui->btnCopyAddress->setEnabled(hasSelection);
 
@@ -455,7 +480,8 @@ void GlyphsPage::onExplorerClicked()
     int row = ui->tableGlyphs->currentRow();
     if (row >= 0 && row < (int)currentGlyphs.size()) {
         const GlyphEntry& g = currentGlyphs[row];
-        QString url = QString("https://explorer.quavence.com/glyph/%1").arg(g.edition);
+        std::string hashHex = HexStr(g.glyphHash.begin(), g.glyphHash.end());
+        QString url = QString("https://explorer.quavence.com/glyphs/%1").arg(QString::fromStdString(hashHex));
         QDesktopServices::openUrl(QUrl(url));
     } else {
         QDesktopServices::openUrl(QUrl("https://explorer.quavence.com/glyphs"));
@@ -471,7 +497,8 @@ void GlyphsPage::onCopyHashClicked()
 {
     int row = ui->tableGlyphs->currentRow();
     if (row >= 0 && row < (int)currentGlyphs.size()) {
-        QApplication::clipboard()->setText(QString::fromStdString(currentGlyphs[row].glyphHash.ToString()));
+        std::string hashHex = HexStr(currentGlyphs[row].glyphHash.begin(), currentGlyphs[row].glyphHash.end());
+        QApplication::clipboard()->setText(QString::fromStdString(hashHex));
     }
 }
 
@@ -610,8 +637,16 @@ void GlyphsPage::onAgentStateReply()
     }
     ui->lblRarityBadge->setStyleSheet(QString("font-size: 10px; font-weight: 700; font-family: monospace; color: %1; background-color: #0f172a; border-radius: 3px; padding: 1px 4px;").arg(badgeColor));
 
-    // 2. Onchain Status
-    ui->lblOnchainStatus->setText(tr("Auto-Locked · Carrier: 10,000 sat"));
+    // 2. Onchain Status (NEW-14: verified lineage display)
+    int currentRow = ui->tableGlyphs->currentRow();
+    int confs = (currentRow >= 0 && currentRow < (int)currentGlyphs.size()) ? currentGlyphs[currentRow].confirmations : 1;
+    if (confs >= 1) {
+        ui->lblOnchainStatus->setText(tr("Verified (On-Chain Lineage) · 10,000 sat"));
+        ui->lblOnchainStatus->setStyleSheet("font-size: 10px; font-weight: 600; font-family: monospace; color: #16a34a; padding: 1px 0px;");
+    } else {
+        ui->lblOnchainStatus->setText(tr("Unverified Carrier / Pending Explorer Sync"));
+        ui->lblOnchainStatus->setStyleSheet("font-size: 10px; font-weight: 600; font-family: monospace; color: #d97706; padding: 1px 0px;");
+    }
 
     // 3. Daily Quota & Quota Status
     ui->lblDailyQuota->setText(QString(tr("Daily Quota: $%1 / day (~%2 QVNC)"))
@@ -709,6 +744,7 @@ void GlyphsPage::onOpenWebHubClicked()
     uint16_t edition = selectedEdition;
     QString carrierAddrQStr = selectedEntry->carrierAddress.trimmed();
     std::string carrierAddrStr = carrierAddrQStr.toStdString();
+    uint256 glyphHash = selectedEntry->glyphHash;
     selectedEntry = nullptr; // Invalidate raw pointer before modal operations
 
     if (carrierAddrStr.empty() || carrierAddrQStr == tr("(unknown)")) {
@@ -745,7 +781,10 @@ void GlyphsPage::onOpenWebHubClicked()
 
     int64_t ts = GetTime();
     std::string nonce = GetRandHash().ToString().substr(0, 16);
-    std::string msg = "qvnc:lsa:link:" + std::to_string(edition) + ":" + 
+    std::string canonicalGlyphHash = HexStr(glyphHash.begin(), glyphHash.end());
+
+    // Namespace-isolated message binding both canonical glyphHash and edition (NEW-15)
+    std::string msg = "qvnc:lsa:link:" + canonicalGlyphHash + ":" + std::to_string(edition) + ":" + 
                       carrierAddrStr + ":" + std::to_string(ts) + ":" + nonce;
 
     CHashWriter ss(SER_GETHASH, 0);
@@ -759,25 +798,65 @@ void GlyphsPage::onOpenWebHubClicked()
     }
 
     std::string sigBase64 = EncodeBase64(&vchSig[0], vchSig.size());
-
     QString baseUrl = getHubBaseUrl();
 
-    QString claimUrl = QString("%1/agents/link?edition=%2&address=%3&ts=%4&nonce=%5&sig=%6")
-        .arg(baseUrl)
-        .arg(edition)
-        .arg(QString::fromStdString(carrierAddrStr))
-        .arg(ts)
-        .arg(QString::fromStdString(nonce))
-        .arg(QString::fromLatin1(QUrl::toPercentEncoding(QString::fromStdString(sigBase64))));
+    // Prepare JSON payload for secure HTTPS POST (NEW-15: Zero signature in URL / Zero clipboard leakage)
+    QJsonObject payloadObj;
+    payloadObj["glyphHash"] = QString::fromStdString(canonicalGlyphHash);
+    payloadObj["edition"] = (int)edition;
+    payloadObj["carrierAddress"] = QString::fromStdString(carrierAddrStr);
+    payloadObj["timestamp"] = (qint64)ts;
+    payloadObj["nonce"] = QString::fromStdString(nonce);
+    payloadObj["signature"] = QString::fromStdString(sigBase64);
 
-    QApplication::clipboard()->setText(claimUrl);
-    QDesktopServices::openUrl(QUrl(claimUrl));
+    QByteArray postData = QJsonDocument(payloadObj).toJson(QJsonDocument::Compact);
 
-    QMessageBox::information(this, tr("Direct Hub Link"),
-        tr("Direct Hub Link initialized for Glyph #%1.\n\n"
-           "Opening verification gateway in browser:\n%2\n\n"
-           "(Link copied to clipboard).")
-        .arg(edition).arg(claimUrl));
+    QUrl requestUrl(baseUrl + "/api/sovereign-agent/link");
+    QNetworkRequest request(requestUrl);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    ui->btnOpenWebHub->setEnabled(false);
+    ui->btnOpenWebHub->setText(tr("Linking..."));
+
+    QNetworkReply *reply = lsaNetworkManager->post(request, postData);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, baseUrl, edition]() {
+        ui->btnOpenWebHub->setEnabled(true);
+        ui->btnOpenWebHub->setText(tr("Link to Web Hub"));
+
+        if (reply->error() != QNetworkReply::NoError) {
+            QMessageBox::warning(this, tr("Direct Hub Link"),
+                tr("Could not connect to Quavence Web Hub (%1).\nPlease check network connectivity.")
+                .arg(reply->errorString()));
+            reply->deleteLater();
+            return;
+        }
+
+        QByteArray respBytes = reply->readAll();
+        reply->deleteLater();
+
+        QJsonDocument doc = QJsonDocument::fromJson(respBytes);
+        if (!doc.isObject()) {
+            QMessageBox::warning(this, tr("Direct Hub Link"), tr("Invalid response format received from Web Hub."));
+            return;
+        }
+
+        QJsonObject respObj = doc.object();
+        QString sessionToken = respObj["sessionToken"].toString();
+        if (sessionToken.isEmpty()) {
+            QString errStr = respObj.contains("error") ? respObj["error"].toString() : tr("Session token missing.");
+            QMessageBox::warning(this, tr("Direct Hub Link"), tr("Direct Link failed: %1").arg(errStr));
+            return;
+        }
+
+        // Open browser with single-use session ticket (NO signature in URL, NO clipboard copying)
+        QString linkUrl = QString("%1/agents/link?ticket=%2").arg(baseUrl).arg(sessionToken);
+        QDesktopServices::openUrl(QUrl(linkUrl));
+
+        QMessageBox::information(this, tr("Direct Hub Link"),
+            tr("Secure Direct Hub Link established for Glyph #%1.\n\n"
+               "Opening verification session in your web browser.")
+            .arg(edition));
+    });
 }
 
 

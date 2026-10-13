@@ -256,7 +256,8 @@ BOOST_AUTO_TEST_CASE(legacy_banlist_2_entries_upgrade_collision_remediated)
     uint256 hash = Hash(ssLegacy.begin(), ssLegacy.end());
     ssLegacy << hash;
 
-    // Write to GetDataDir() / banlist.dat
+    // Ensure GetDataDir() exists hermetically before file operations
+    boost::filesystem::create_directories(GetDataDir());
     boost::filesystem::path banPath = GetDataDir() / "banlist.dat";
     {
         FILE *file = fopen(banPath.string().c_str(), "wb");
@@ -275,10 +276,13 @@ BOOST_AUTO_TEST_CASE(legacy_banlist_2_entries_upgrade_collision_remediated)
     BOOST_CHECK_EQUAL(loadedBans.size(), 2u);
     BOOST_CHECK(loadedBans.count(CSubNet(ip1)) == 1);
     BOOST_CHECK(loadedBans.count(CSubNet(ip2)) == 1);
+    boost::filesystem::remove(banPath);
 }
 
 BOOST_AUTO_TEST_CASE(current_banlist_2_entries_roundtrip)
 {
+    boost::filesystem::create_directories(GetDataDir());
+    boost::filesystem::path banPath = GetDataDir() / "banlist.dat";
     banmap_t bans;
     CNetAddr ip1, ip2;
     BOOST_REQUIRE(LookupHost("198.51.100.1", ip1, false));

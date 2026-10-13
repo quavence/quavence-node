@@ -40,8 +40,8 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, const Config *cfg, Q
 {
     // Create tabs
     overviewPage = new OverviewPage(platformStyle);
-    aiWorkerPage = new AIWorkerPage(platformStyle, this);
-    glyphsPage = new GlyphsPage(platformStyle, this);
+    aiWorkerPage = new AIWorkerPage(platformStyle);
+    glyphsPage = new GlyphsPage(platformStyle);
 
     transactionsPage = new QWidget(this);
     QVBoxLayout *vbox = new QVBoxLayout();

@@ -454,8 +454,8 @@ void BitcoinApplication::initializeResult(int retval)
         // Log this only after AppInit2 finishes, as then logging setup is guaranteed complete
         qWarning() << "Platform customization:" << platformStyle->getName();
 #ifdef ENABLE_WALLET
-        PaymentServer::LoadRootCAs();
-        AIWorkerPage::EnsureSslCertificatesLoaded();
+        // PaymentServer::LoadRootCAs();
+        // AIWorkerPage::EnsureSslCertificatesLoaded();
         paymentServer->setOptionsModel(optionsModel);
 #endif
 

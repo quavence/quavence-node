@@ -16,7 +16,7 @@
   <property name="styleSheet">
    <string notr="true">
     QWidget {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        
         color: #1e293b;
     }
     QPushButton {
@@ -459,6 +459,11 @@
            </column>
            <column>
             <property name="text">
+             <string>Lineage</string>
+            </property>
+           </column>
+           <column>
+            <property name="text">
              <string>Protection</string>
             </property>
            </column>
@@ -664,6 +669,16 @@
               </property>
               <property name="text">
                <string>Open Web Hub</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btnViewOnExplorer">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="text">
+               <string>View on Explorer</string>
               </property>
              </widget>
             </item>
