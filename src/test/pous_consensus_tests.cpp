@@ -473,5 +473,83 @@ BOOST_AUTO_TEST_CASE(coinstake_split_mainnet_params_verification)
     BOOST_CHECK_EQUAL(statePost.GetRejectReason(), "bad-cs-no-devfund");
 }
 
-BOOST_AUTO_TEST_SUITE_END()
+BOOST_AUTO_TEST_CASE(multi_glyph_carrier_assignment_parity_fixture)
+{
+    auto makeGlyphScript = [](uint8_t opType, uint16_t edition, uint8_t hashByte) -> CScript {
+        std::vector<unsigned char> data;
+        data.push_back('Q'); data.push_back('V'); data.push_back('N'); data.push_back('C');
+        data.push_back(0x01);
+        data.push_back(opType);
+        for (int i = 0; i < 32; ++i) data.push_back(hashByte);
+        data.push_back((unsigned char)(edition & 0xFF));
+        data.push_back((unsigned char)((edition >> 8) & 0xFF));
+        CScript s;
+        s << OP_RETURN << data;
+        return s;
+    };
 
+    CKey key1, key2;
+    key1.MakeNewKey(true);
+    key2.MakeNewKey(true);
+    CScript destScript1 = GetScriptForDestination(key1.GetPubKey().GetID());
+    CScript destScript2 = GetScriptForDestination(key2.GetPubKey().GetID());
+
+    // Fixture 1: Forward ordering [Carrier 1, OP_RETURN 1, Carrier 2, OP_RETURN 2, Change]
+    {
+        CMutableTransaction tx;
+        tx.vin.push_back(CTxIn());
+        tx.vout.push_back(CTxOut(GLYPH_CARRIER_DUST, destScript1));
+        tx.vout.push_back(CTxOut(0, makeGlyphScript(0x01, 101, 0xAA)));
+        tx.vout.push_back(CTxOut(GLYPH_CARRIER_DUST, destScript2));
+        tx.vout.push_back(CTxOut(0, makeGlyphScript(0x03, 102, 0xBB)));
+        tx.vout.push_back(CTxOut(50000, destScript1));
+
+        GlyphCarrierRecord rec0, rec1, rec2, rec3, rec4;
+        BOOST_CHECK(GetTxGlyphCarrier(CTransaction(tx), 0, rec0));
+        BOOST_CHECK_EQUAL(rec0.edition, 101);
+        BOOST_CHECK_EQUAL(rec0.opType, 0x01);
+
+        BOOST_CHECK(!GetTxGlyphCarrier(CTransaction(tx), 1, rec1));
+
+        BOOST_CHECK(GetTxGlyphCarrier(CTransaction(tx), 2, rec2));
+        BOOST_CHECK_EQUAL(rec2.edition, 102);
+        BOOST_CHECK_EQUAL(rec2.opType, 0x03);
+
+        BOOST_CHECK(!GetTxGlyphCarrier(CTransaction(tx), 3, rec3));
+        BOOST_CHECK(!GetTxGlyphCarrier(CTransaction(tx), 4, rec4));
+    }
+
+    // Fixture 2: Reverse ordering [OP_RETURN 1, Carrier 1, OP_RETURN 2, Carrier 2]
+    {
+        CMutableTransaction tx;
+        tx.vin.push_back(CTxIn());
+        tx.vout.push_back(CTxOut(0, makeGlyphScript(0x01, 201, 0xCC)));
+        tx.vout.push_back(CTxOut(GLYPH_CARRIER_DUST, destScript1));
+        tx.vout.push_back(CTxOut(0, makeGlyphScript(0x03, 202, 0xDD)));
+        tx.vout.push_back(CTxOut(GLYPH_CARRIER_DUST, destScript2));
+
+        GlyphCarrierRecord rec0, rec1, rec2, rec3;
+        BOOST_CHECK(!GetTxGlyphCarrier(CTransaction(tx), 0, rec0));
+
+        BOOST_CHECK(GetTxGlyphCarrier(CTransaction(tx), 1, rec1));
+        BOOST_CHECK_EQUAL(rec1.edition, 201);
+
+        BOOST_CHECK(!GetTxGlyphCarrier(CTransaction(tx), 2, rec2));
+
+        BOOST_CHECK(GetTxGlyphCarrier(CTransaction(tx), 3, rec3));
+        BOOST_CHECK_EQUAL(rec3.edition, 202);
+    }
+
+    // Fixture 3: BURN operation (0x04) destroys carrier; 10k change output is NOT misclassified
+    {
+        CMutableTransaction tx;
+        tx.vin.push_back(CTxIn());
+        tx.vout.push_back(CTxOut(GLYPH_CARRIER_DUST, destScript1));
+        tx.vout.push_back(CTxOut(0, makeGlyphScript(0x04, 301, 0xEE)));
+
+        GlyphCarrierRecord rec0;
+        BOOST_CHECK(!GetTxGlyphCarrier(CTransaction(tx), 0, rec0));
+    }
+}
+
+BOOST_AUTO_TEST_SUITE_END()
