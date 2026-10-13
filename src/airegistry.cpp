@@ -12,6 +12,7 @@
 #include "base58.h"
 #include "pubkey.h"
 #include <algorithm>
+#include <set>
 #include <boost/variant.hpp>
 
 // ─── Internal state ──────────────────────────────────────────────────────────
@@ -179,12 +180,50 @@ bool GetTxGlyphCarrier(const CTransaction& tx, unsigned int nOut, GlyphCarrierRe
 {
     if (nOut >= tx.vout.size()) return false;
     if (tx.vout[nOut].nValue != GLYPH_CARRIER_DUST) return false;
+    if (tx.vout[nOut].scriptPubKey.IsUnspendable()) return false;
 
-    // Find companion OP_RETURN with QVNC magic in same transaction
+    // Collect all glyph OP_RETURN records in the transaction (NEW-14 remediation)
+    std::vector<std::pair<size_t, GlyphCarrierRecord> > glyphOps;
     for (size_t i = 0; i < tx.vout.size(); ++i) {
-        if (ExtractGlyphRecord(tx.vout[i], record))
-            return true;
+        GlyphCarrierRecord rec;
+        if (ExtractGlyphRecord(tx.vout[i], rec)) {
+            // BURN operations (opType 0x04) destroy the carrier; they do not produce a valid carrier output.
+            if (rec.opType != 0x04) {
+                glyphOps.push_back(std::make_pair(i, rec));
+            }
+        }
     }
+
+    if (glyphOps.empty()) return false;
+
+    // Associate each glyph OP_RETURN with its designated carrier output
+    // Canonical Explorer Rule (indexer.ts:481):
+    // For each glyph operation in order of appearance in tx.vout, associate with the first unassigned spendable 10,000-sat output.
+    std::set<size_t> assignedCarriers;
+    for (size_t g = 0; g < glyphOps.size(); ++g) {
+        const GlyphCarrierRecord& rec = glyphOps[g].second;
+        int targetCarrierIdx = -1;
+
+        for (size_t c = 0; c < tx.vout.size(); ++c) {
+            if (assignedCarriers.find(c) != assignedCarriers.end()) continue;
+            if (tx.vout[c].nValue == GLYPH_CARRIER_DUST && !tx.vout[c].scriptPubKey.IsUnspendable()) {
+                CTxDestination dest;
+                if (ExtractDestination(tx.vout[c].scriptPubKey, dest)) {
+                    targetCarrierIdx = (int)c;
+                    break;
+                }
+            }
+        }
+
+        if (targetCarrierIdx >= 0) {
+            assignedCarriers.insert((size_t)targetCarrierIdx);
+            if ((size_t)targetCarrierIdx == nOut) {
+                record = rec;
+                return true;
+            }
+        }
+    }
+
     return false;
 }
 

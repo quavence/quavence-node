@@ -10,6 +10,7 @@
 #include "coincontrol.h"
 #include "dstencode.h"
 #include "guiutil.h"
+#include "utilstrencodings.h"
 #include "main.h"
 #include "platformstyle.h"
 #include "walletmodel.h"
@@ -38,9 +39,9 @@ GlyphTransferDialog::GlyphTransferDialog(const PlatformStyle *_platformStyle,
 {
     ui->setupUi(this);
 
-    ui->lblEditionVal->setText(QString("PoUS Edition #%1").arg(m_edition));
-    ui->lblHashVal->setText(QString::fromStdString(m_glyphHash.ToString()));
-    ui->lblCarrierVal->setText(QString("%1:%2 (10,000 satoshi)").arg(QString::fromStdString(m_carrierTxid.ToString())).arg(m_carrierVout));
+    ui->lblEditionVal->setText(QString(tr("PoUS Glyph #%1")).arg(m_edition));
+    ui->lblHashVal->setText(QString::fromStdString(HexStr(m_glyphHash.begin(), m_glyphHash.end())));
+    ui->lblCarrierVal->setText(QString(tr("%1:%2 (10 000 sat)")).arg(QString::fromStdString(m_carrierTxid.ToString())).arg(m_carrierVout));
 
     connect(ui->lineEditRecipient, SIGNAL(textChanged(QString)), this, SLOT(onRecipientChanged(QString)));
     connect(ui->btnPaste, SIGNAL(clicked()), this, SLOT(onPasteClicked()));

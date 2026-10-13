@@ -13,6 +13,8 @@ class ClientModel;
 class WalletModel;
 class PlatformStyle;
 class QShowEvent;
+class QNetworkAccessManager;
+class QNetworkReply;
 
 namespace Ui {
 class GlyphsPage;
@@ -53,6 +55,13 @@ public Q_SLOTS:
     void onCopyEditionClicked();
     void onCustomContextMenu(const QPoint &pos);
 
+    // Compute Pass Slots
+    void onAgentStateReply();
+    void onAgentPreviewReply();
+    void onOpenTelegramClicked();
+    void onOpenWebHubClicked();
+    void onToggleIdPrivacyClicked();
+
 protected:
     virtual void showEvent(QShowEvent *event) override;
 
@@ -63,7 +72,20 @@ private:
     const PlatformStyle *platformStyle;
     std::vector<GlyphEntry> currentGlyphs;
 
+    // Compute Pass State & Network
+    QNetworkAccessManager *lsaNetworkManager;
+    uint16_t selectedEdition;
+    bool showConsumerId;
+    QString rawConsumerId;
+    bool isAgentLinked;
+    QString lastLoadedPreviewKey;
+
+    void updateLinkStatusDisplay();
+
     void updateSelectionState();
+    void requestAgentState(uint16_t edition);
+    void requestAgentPreview(uint16_t edition, const QString &phase);
+    QString getHubBaseUrl() const;
 };
 
 #endif // BITCOIN_QT_GLYPHSPAGE_H

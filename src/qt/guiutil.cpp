@@ -638,7 +638,7 @@ void InitBrandPalette()
     pal.setColor(QPalette::Disabled, QPalette::HighlightedText, textMuted);
 
     QApplication::setPalette(pal);
-    qApp->setStyleSheet(brandStyleSheet());
+    // qApp->setStyleSheet(brandStyleSheet());
 }
 
 QIcon txTypeDotIcon(const QColor &color, int diameter)

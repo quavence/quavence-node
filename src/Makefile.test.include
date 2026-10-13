@@ -75,6 +75,7 @@ BITCOIN_TESTS =\
   test/protocol_migration_tests.cpp \
   test/torv3_addrman_tests.cpp \
   test/pous_consensus_tests.cpp \
+  test/torv3_banlist_tests.cpp \
   test/pous_authorization_tests.cpp \
   test/pow_tests.cpp \
   test/prevector_tests.cpp \

@@ -13,6 +13,11 @@
 #include "platformstyle.h"
 #include "walletmodel.h"
 #include "wallet/wallet.h"
+#include "main.h"
+#include "random.h"
+#include "utilstrencodings.h"
+#include "utiltime.h"
+
 
 #include <algorithm>
 #include <set>
@@ -22,9 +27,17 @@
 #include <QHeaderView>
 #include <QMenu>
 #include <QMessageBox>
+#include <QTimer>
 #include <QShowEvent>
 #include <QTableWidgetItem>
 #include <QUrl>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QPixmap>
+
 
 GlyphsPage::GlyphsPage(const PlatformStyle *_platformStyle, QWidget *parent) :
     QWidget(parent),
@@ -35,23 +48,53 @@ GlyphsPage::GlyphsPage(const PlatformStyle *_platformStyle, QWidget *parent) :
 {
     ui->setupUi(this);
 
-    // Setup table columns
-    ui->tableGlyphs->setColumnCount(6);
+    // Setup table columns (NEW-14: 7 columns with Lineage verification)
+    ui->tableGlyphs->setColumnCount(7);
+    ui->tableGlyphs->verticalHeader()->hide();
+    ui->tableGlyphs->setShowGrid(true);
+
     QStringList headers;
     headers << tr("Edition")
             << tr("Glyph Hash")
             << tr("Carrier Address")
             << tr("Carrier UTXO")
+            << tr("Lineage")
             << tr("Protection")
             << tr("Confirmations");
     ui->tableGlyphs->setHorizontalHeaderLabels(headers);
 
-    ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
+    ui->tableGlyphs->setColumnWidth(0, 75);
+
+    ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
+    ui->tableGlyphs->setColumnWidth(1, 175);
+
     ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
-    ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-    ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
-    ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
+
+    ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Fixed);
+    ui->tableGlyphs->setColumnWidth(3, 110);
+
+    ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Fixed);
+    ui->tableGlyphs->setColumnWidth(4, 110);
+
+    ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Fixed);
+    ui->tableGlyphs->setColumnWidth(5, 100);
+
+    ui->tableGlyphs->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Fixed);
+    ui->tableGlyphs->setColumnWidth(6, 100);
+
+    ui->tableGlyphs->horizontalHeader()->setStretchLastSection(false);
+
+    for (int col = 0; col < 7; ++col) {
+        QTableWidgetItem *hItem = ui->tableGlyphs->horizontalHeaderItem(col);
+        if (hItem) {
+            if (col == 0 || col == 3 || col == 4 || col == 5 || col == 6) {
+                hItem->setTextAlignment(Qt::AlignCenter);
+            } else {
+                hItem->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+            }
+        }
+    }
 
     // Connections
     connect(ui->btnRefresh, SIGNAL(clicked()), this, SLOT(onRefreshClicked()));
@@ -67,7 +110,27 @@ GlyphsPage::GlyphsPage(const PlatformStyle *_platformStyle, QWidget *parent) :
     ui->tableGlyphs->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(ui->tableGlyphs, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(onCustomContextMenu(QPoint)));
 
-    updateGlyphs();
+    // Compute Pass initialization & connections
+    lsaNetworkManager = new QNetworkAccessManager(this);
+    selectedEdition = 0;
+    showConsumerId = false;
+    isAgentLinked = false;
+    ui->btnToggleIdPrivacy->setVisible(false);
+    ui->btnToggleIdPrivacy->setCursor(Qt::PointingHandCursor);
+    connect(ui->btnOpenTelegram, SIGNAL(clicked()), this, SLOT(onOpenTelegramClicked()));
+    connect(ui->btnOpenWebHub, SIGNAL(clicked()), this, SLOT(onOpenWebHubClicked()));
+    connect(ui->btnViewOnExplorer, SIGNAL(clicked()), this, SLOT(onExplorerClicked()));
+    connect(ui->btnToggleIdPrivacy, SIGNAL(clicked()), this, SLOT(onToggleIdPrivacyClicked()));
+
+    // Live Telemetry Poller: updates fuel, cycles, phase in real-time (no tab switching needed)
+    QTimer *telemetryTimer = new QTimer(this);
+    connect(telemetryTimer, &QTimer::timeout, this, [this]() {
+        if (selectedEdition > 0 && isVisible()) {
+            requestAgentState(selectedEdition);
+        }
+    });
+    telemetryTimer->start(30000); // 30s
+    // updateGlyphs deferred to setWalletModel
 }
 
 GlyphsPage::~GlyphsPage()
@@ -104,6 +167,7 @@ void GlyphsPage::showEvent(QShowEvent *event)
 
 void GlyphsPage::updateGlyphs()
 {
+    uint32_t prevSelectedEdition = selectedEdition;
     currentGlyphs.clear();
 
     if (!walletModel || !walletModel->getWallet()) {
@@ -213,41 +277,60 @@ void GlyphsPage::updateGlyphs()
         const GlyphEntry& g = currentGlyphs[row];
         ui->tableGlyphs->insertRow(row);
 
-        // Edition
-        QString editionStr = QString("💎 #%1").arg(g.edition);
+        // Edition (clean, no emoji, centered)
+        QString editionStr = QString("#%1").arg(g.edition);
         QTableWidgetItem *itemEdition = new QTableWidgetItem(editionStr);
         itemEdition->setFont(QFont(font().family(), 10, QFont::Bold));
+        itemEdition->setTextAlignment(Qt::AlignCenter);
         ui->tableGlyphs->setItem(row, 0, itemEdition);
 
-        // Hash
-        std::string hashHex = g.glyphHash.ToString();
+        // Hash (left-aligned, canonical big-endian hex matching Explorer API and search)
+        std::string hashHex = HexStr(g.glyphHash.begin(), g.glyphHash.end());
         QString hashShort = QString::fromStdString(hashHex.substr(0, 10) + "..." + hashHex.substr(hashHex.length() - 8));
         QTableWidgetItem *itemHash = new QTableWidgetItem(hashShort);
         itemHash->setToolTip(QString::fromStdString(hashHex));
+        itemHash->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         ui->tableGlyphs->setItem(row, 1, itemHash);
 
-        // Carrier Address
+        // Carrier Address (left-aligned)
         QTableWidgetItem *itemAddress = new QTableWidgetItem(g.carrierAddress);
         itemAddress->setToolTip(g.carrierAddress);
+        itemAddress->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         ui->tableGlyphs->setItem(row, 2, itemAddress);
 
-        // Carrier UTXO
+        // Carrier UTXO (centered)
         QString utxoStr = QString("%1:%2")
             .arg(QString::fromStdString(g.txid.ToString().substr(0, 8) + "..."))
             .arg(g.vout);
         QTableWidgetItem *itemUtxo = new QTableWidgetItem(utxoStr);
         itemUtxo->setToolTip(QString("%1:%2").arg(QString::fromStdString(g.txid.ToString())).arg(g.vout));
+        itemUtxo->setTextAlignment(Qt::AlignCenter);
         ui->tableGlyphs->setItem(row, 3, itemUtxo);
 
-        // Protection
-        QString lockStr = g.isLocked ? tr("🔒 Auto-Locked") : tr("🔓 Unlocked");
+        // Lineage Status (NEW-14: On-Chain Lineage vs Pending Verification)
+        QString lineageText = (g.confirmations >= 1) ? tr("Verified") : tr("Pending Sync");
+        QTableWidgetItem *itemLineage = new QTableWidgetItem(lineageText);
+        itemLineage->setTextAlignment(Qt::AlignCenter);
+        if (g.confirmations >= 1) {
+            itemLineage->setForeground(QBrush(QColor("#16a34a")));
+            itemLineage->setToolTip(tr("Verified (On-Chain Lineage, %1 confirmations)").arg(g.confirmations));
+        } else {
+            itemLineage->setForeground(QBrush(QColor("#d97706")));
+            itemLineage->setToolTip(tr("Unverified Carrier / Pending Explorer Sync (0 confirmations)"));
+        }
+        ui->tableGlyphs->setItem(row, 4, itemLineage);
+
+        // Protection (clean text, no emoji, centered)
+        QString lockStr = g.isLocked ? tr("Auto-Locked") : tr("Unlocked");
         QTableWidgetItem *itemLock = new QTableWidgetItem(lockStr);
         itemLock->setToolTip(tr("PoUS Staking & Spending Immunity Active"));
-        ui->tableGlyphs->setItem(row, 4, itemLock);
+        itemLock->setTextAlignment(Qt::AlignCenter);
+        ui->tableGlyphs->setItem(row, 5, itemLock);
 
-        // Confirmations
+        // Confirmations (centered)
         QTableWidgetItem *itemConf = new QTableWidgetItem(QString::number(g.confirmations));
-        ui->tableGlyphs->setItem(row, 5, itemConf);
+        itemConf->setTextAlignment(Qt::AlignCenter);
+        ui->tableGlyphs->setItem(row, 6, itemConf);
     }
 
     // Update KPI metrics & stack view
@@ -258,16 +341,102 @@ void GlyphsPage::updateGlyphs()
 
     if (count == 0) {
         ui->stackedWidget->setCurrentIndex(0);
+        selectedEdition = 0;
+        updateSelectionState();
     } else {
         ui->stackedWidget->setCurrentIndex(1);
-    }
 
-    updateSelectionState();
+        // Preserve previous selection or auto-select first glyph by default
+        int rowToSelect = -1;
+        if (prevSelectedEdition > 0) {
+            for (size_t r = 0; r < currentGlyphs.size(); ++r) {
+                if (currentGlyphs[r].edition == prevSelectedEdition) {
+                    rowToSelect = (int)r;
+                    break;
+                }
+            }
+        }
+        if (rowToSelect == -1 && !currentGlyphs.empty()) {
+            rowToSelect = 0; // Auto-select first glyph
+        }
+
+        if (rowToSelect >= 0 && rowToSelect < (int)currentGlyphs.size()) {
+            ui->tableGlyphs->selectRow(rowToSelect);
+        } else {
+            updateSelectionState();
+        }
+    }
 }
 
 void GlyphsPage::onTableSelectionChanged()
 {
-    updateSelectionState();
+    int row = ui->tableGlyphs->currentRow();
+    if (row >= 0 && row < (int)currentGlyphs.size()) {
+        uint16_t newEdition = currentGlyphs[row].edition;
+        if (newEdition != selectedEdition) {
+            selectedEdition = newEdition;
+            showConsumerId = false;
+        }
+        ui->lblCardTitle->setText(QString("PoUS Glyph #%1 · Compute Pass").arg(selectedEdition));
+        if (currentGlyphs[row].confirmations >= 1) {
+            ui->lblOnchainStatus->setText(tr("Verified (On-Chain Lineage) · 10,000 sat"));
+            ui->lblOnchainStatus->setStyleSheet("font-size: 10px; font-weight: 600; font-family: monospace; color: #16a34a; padding: 1px 0px;");
+        } else {
+            ui->lblOnchainStatus->setText(tr("Unverified Carrier / Pending Explorer Sync"));
+            ui->lblOnchainStatus->setStyleSheet("font-size: 10px; font-weight: 600; font-family: monospace; color: #d97706; padding: 1px 0px;");
+        }
+        requestAgentState(selectedEdition);
+        updateSelectionState();
+    } else if (!currentGlyphs.empty()) {
+        // Sticky Selection: if user clicked table margin or focus shifted,
+        // restore selection of the currently active edition if it is still valid.
+        int rowToRestore = -1;
+        if (selectedEdition > 0) {
+            for (size_t r = 0; r < currentGlyphs.size(); ++r) {
+                if (currentGlyphs[r].edition == selectedEdition) {
+                    rowToRestore = (int)r;
+                    break;
+                }
+            }
+        }
+        if (rowToRestore >= 0) {
+            ui->tableGlyphs->selectRow(rowToRestore);
+            return;
+        }
+
+        selectedEdition = 0;
+        lastLoadedPreviewKey.clear();
+        ui->lblGlyphPreview->setText(QString("<span style='color: #64748b; font-size: 11px; font-family: monospace;'>%1</span>").arg(tr("SELECT GLYPH")));
+        ui->lblCardTitle->setText(tr("PoUS Glyph · Compute Pass"));
+        ui->lblRarityBadge->setText(tr("[NONE]"));
+        ui->lblRarityBadge->setStyleSheet("font-size: 10px; font-weight: 700; font-family: monospace; color: #64748b; background-color: #0f172a; border-radius: 3px; padding: 1px 4px;");
+        ui->lblOnchainStatus->setText(tr("Auto-Locked · Carrier: 10,000 sat"));
+        ui->lblDailyQuota->setText(tr("Daily Quota: —"));
+        ui->lblQuotaStatus->setText(tr("Available: — · Resets in —"));
+        ui->lblFuelReserve->setText(tr("Fuel Reserve: —"));
+        isAgentLinked = false;
+        rawConsumerId.clear();
+        showConsumerId = false;
+        updateLinkStatusDisplay();
+        ui->btnOpenWebHub->setText(tr("Link to Web Hub"));
+        updateSelectionState();
+    } else {
+        selectedEdition = 0;
+        ui->lblGlyphPreview->setText(QString("<span style='color: #64748b; font-size: 11px; font-family: monospace;'>%1</span>").arg(tr("SELECT GLYPH")));
+        ui->lblCardTitle->setText(tr("PoUS Glyph · Compute Pass"));
+        ui->lblRarityBadge->setText(tr("[NONE]"));
+        ui->lblRarityBadge->setStyleSheet("font-size: 10px; font-weight: 700; font-family: monospace; color: #64748b; background-color: #0f172a; border-radius: 3px; padding: 1px 4px;");
+        ui->lblOnchainStatus->setText(tr("Auto-Locked · Carrier: 10,000 sat"));
+        ui->lblDailyQuota->setText(tr("Daily Quota: —"));
+        ui->lblQuotaStatus->setText(tr("Available: — · Resets in —"));
+        ui->lblFuelReserve->setText(tr("Fuel Reserve: —"));
+        isAgentLinked = false;
+        rawConsumerId.clear();
+        showConsumerId = false;
+        updateLinkStatusDisplay();
+        ui->btnOpenWebHub->setText(tr("Link to Web Hub"));
+        updateSelectionState();
+    }
 }
 
 void GlyphsPage::updateSelectionState()
@@ -276,8 +445,12 @@ void GlyphsPage::updateSelectionState()
     bool hasSelection = (row >= 0 && row < (int)currentGlyphs.size());
     ui->btnTransfer->setEnabled(hasSelection);
     ui->btnExplorerRow->setEnabled(hasSelection);
+    ui->btnViewOnExplorer->setEnabled(hasSelection);
     ui->btnCopyHash->setEnabled(hasSelection);
     ui->btnCopyAddress->setEnabled(hasSelection);
+
+    ui->btnOpenTelegram->setEnabled(hasSelection);
+    ui->btnOpenWebHub->setEnabled(hasSelection);
 }
 
 void GlyphsPage::onTableDoubleClicked(int row, int /*column*/)
@@ -307,7 +480,8 @@ void GlyphsPage::onExplorerClicked()
     int row = ui->tableGlyphs->currentRow();
     if (row >= 0 && row < (int)currentGlyphs.size()) {
         const GlyphEntry& g = currentGlyphs[row];
-        QString url = QString("https://explorer.quavence.com/glyph/%1").arg(g.edition);
+        std::string hashHex = HexStr(g.glyphHash.begin(), g.glyphHash.end());
+        QString url = QString("https://explorer.quavence.com/glyphs/%1").arg(QString::fromStdString(hashHex));
         QDesktopServices::openUrl(QUrl(url));
     } else {
         QDesktopServices::openUrl(QUrl("https://explorer.quavence.com/glyphs"));
@@ -323,7 +497,8 @@ void GlyphsPage::onCopyHashClicked()
 {
     int row = ui->tableGlyphs->currentRow();
     if (row >= 0 && row < (int)currentGlyphs.size()) {
-        QApplication::clipboard()->setText(QString::fromStdString(currentGlyphs[row].glyphHash.ToString()));
+        std::string hashHex = HexStr(currentGlyphs[row].glyphHash.begin(), currentGlyphs[row].glyphHash.end());
+        QApplication::clipboard()->setText(QString::fromStdString(hashHex));
     }
 }
 
@@ -385,4 +560,340 @@ void GlyphsPage::onCustomContextMenu(const QPoint &pos)
     contextMenu.addAction(tr("View in Quavence Explorer"), this, SLOT(onExplorerClicked()));
 
     contextMenu.exec(ui->tableGlyphs->viewport()->mapToGlobal(pos));
+}
+
+QString GlyphsPage::getHubBaseUrl() const
+{
+    QString hubEnv = QString::fromLocal8Bit(qgetenv("QUAVENCE_HUB_URL"));
+    if (!hubEnv.trimmed().isEmpty()) {
+        return hubEnv.trimmed();
+    }
+    return QString("https://quavence.com");
+}
+
+void GlyphsPage::requestAgentState(uint16_t edition)
+{
+    if (edition == 0) return;
+    QUrl url(getHubBaseUrl() + "/api/sovereign-agent/" + QString::number(edition) + "/state");
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    QNetworkReply *reply = lsaNetworkManager->get(request);
+    connect(reply, SIGNAL(finished()), this, SLOT(onAgentStateReply()));
+}
+
+void GlyphsPage::onAgentStateReply()
+{
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    if (!reply) return;
+
+    if (reply->error() != QNetworkReply::NoError) {
+        ui->lblDailyQuota->setText(tr("Daily Quota: [OFFLINE]"));
+        ui->lblQuotaStatus->setText(tr("Available: — · Resets in —"));
+        ui->lblFuelReserve->setText(tr("Fuel Reserve: [OFFLINE]"));
+        ui->lblLinkStatus->setText(tr("Telegram: [OFFLINE]"));
+        ui->lblLinkStatus->setStyleSheet("font-size: 10px; color: #64748b; font-family: monospace;");
+        reply->deleteLater();
+        return;
+    }
+
+    QByteArray data = reply->readAll();
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isObject()) {
+        reply->deleteLater();
+        return;
+    }
+
+    QJsonObject obj = doc.object();
+    QJsonObject computePass = obj["compute_pass"].toObject();
+
+    QString tier = computePass.contains("tier") ? computePass["tier"].toString("Common") : obj["rarity"].toString("Common");
+    double dailyQuotaUsd = computePass["daily_quota_usd"].toDouble(0.0);
+    double dailyQuotaQvnc = computePass["daily_quota_qvnc"].toDouble(0.0);
+    double quotaRemainingUsd = computePass["quota_remaining_usd"].toDouble(dailyQuotaUsd);
+    int resetsInHours = computePass["quota_resets_in_hours"].toInt(24);
+
+    double fuelReserve = 0.0;
+    if (computePass.contains("fuel_reserve_qvnc")) {
+        fuelReserve = computePass["fuel_reserve_qvnc"].toDouble(0.0);
+    } else if (obj.contains("fuel_balance")) {
+        fuelReserve = obj["fuel_balance"].toString("0").toDouble();
+    }
+
+    bool isLinked = obj["is_linked"].toBool(false);
+    QString consumerId = obj["consumer_id"].toString();
+
+    // 1. Title & Rarity Badge
+    ui->lblCardTitle->setText(QString(tr("PoUS Glyph #%1 · Compute Pass")).arg(selectedEdition));
+    ui->lblRarityBadge->setText(QString("[%1]").arg(tier.toUpper()));
+
+    QString badgeColor = "#94a3b8"; // Common
+    QString tierLower = tier.toLower();
+    if (tierLower == "rare") {
+        badgeColor = "#38bdf8";
+    } else if (tierLower == "epic") {
+        badgeColor = "#c084fc";
+    } else if (tierLower == "legendary") {
+        badgeColor = "#f59e0b";
+    }
+    ui->lblRarityBadge->setStyleSheet(QString("font-size: 10px; font-weight: 700; font-family: monospace; color: %1; background-color: #0f172a; border-radius: 3px; padding: 1px 4px;").arg(badgeColor));
+
+    // 2. Onchain Status (NEW-14: verified lineage display)
+    int currentRow = ui->tableGlyphs->currentRow();
+    int confs = (currentRow >= 0 && currentRow < (int)currentGlyphs.size()) ? currentGlyphs[currentRow].confirmations : 1;
+    if (confs >= 1) {
+        ui->lblOnchainStatus->setText(tr("Verified (On-Chain Lineage) · 10,000 sat"));
+        ui->lblOnchainStatus->setStyleSheet("font-size: 10px; font-weight: 600; font-family: monospace; color: #16a34a; padding: 1px 0px;");
+    } else {
+        ui->lblOnchainStatus->setText(tr("Unverified Carrier / Pending Explorer Sync"));
+        ui->lblOnchainStatus->setStyleSheet("font-size: 10px; font-weight: 600; font-family: monospace; color: #d97706; padding: 1px 0px;");
+    }
+
+    // 3. Daily Quota & Quota Status
+    ui->lblDailyQuota->setText(QString(tr("Daily Quota: $%1 / day (~%2 QVNC)"))
+        .arg(QString::number(dailyQuotaUsd, 'f', 2))
+        .arg(QString::number(dailyQuotaQvnc, 'f', 3)));
+
+    double quotaRemainingQvnc = computePass["quota_remaining_qvnc"].toDouble(0.0);
+    int percentAvail = dailyQuotaUsd > 0.0 ? (int)std::round((quotaRemainingUsd / dailyQuotaUsd) * 100.0) : 100;
+    ui->lblQuotaStatus->setText(QString(tr("Available: $%1 (~%2 QVNC) · %3% · Resets in %4h"))
+        .arg(QString::number(quotaRemainingUsd, 'f', 2))
+        .arg(QString::number(quotaRemainingQvnc, 'f', 3))
+        .arg(percentAvail)
+        .arg(resetsInHours));
+
+    // 4. Fuel Reserve
+    ui->lblFuelReserve->setText(QString(tr("Fuel Reserve: %1 QVNC"))
+        .arg(QString::number(fuelReserve, 'f', 8)));
+
+    // 5. Link Status
+    isAgentLinked = isLinked;
+    rawConsumerId = consumerId;
+    updateLinkStatusDisplay();
+    if (isLinked) {
+        ui->btnOpenWebHub->setText(tr("Open Web Hub"));
+    } else {
+        ui->btnOpenWebHub->setText(tr("Link to Web Hub"));
+    }
+
+    QString phase = obj.value("phase").toString("AWAKE_IDLE");
+    QString previewKey = QString("%1_%2").arg(selectedEdition).arg(phase);
+    if (previewKey != lastLoadedPreviewKey) {
+        lastLoadedPreviewKey = previewKey;
+        requestAgentPreview(selectedEdition, phase);
+    }
+    reply->deleteLater();
+}
+
+void GlyphsPage::requestAgentPreview(uint16_t edition, const QString &phase)
+{
+    if (edition == 0) return;
+    QUrl url(getHubBaseUrl() + "/api/sovereign-agent/" + QString::number(edition) + "/preview.png?phase=" + phase);
+    QNetworkRequest request(url);
+    QNetworkReply *reply = lsaNetworkManager->get(request);
+    connect(reply, SIGNAL(finished()), this, SLOT(onAgentPreviewReply()));
+}
+
+void GlyphsPage::onAgentPreviewReply()
+{
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+    if (!reply) return;
+
+    if (reply->error() == QNetworkReply::NoError) {
+        QByteArray imgData = reply->readAll();
+        QPixmap pixmap;
+        if (pixmap.loadFromData(imgData)) {
+            ui->lblGlyphPreview->setPixmap(pixmap.scaled(180, 180, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        }
+    } else {
+        lastLoadedPreviewKey.clear();
+    }
+    reply->deleteLater();
+}
+
+void GlyphsPage::onOpenTelegramClicked()
+{
+    QDesktopServices::openUrl(QUrl("https://t.me/qvnc_wallet_bot"));
+}
+
+void GlyphsPage::onOpenWebHubClicked()
+{
+    if (selectedEdition == 0) {
+        QMessageBox::warning(this, tr("Direct Hub Link"), tr("Please select a glyph in the list before linking."));
+        return;
+    }
+
+    int row = ui->tableGlyphs->currentRow();
+    const GlyphEntry* selectedEntry = nullptr;
+    if (row >= 0 && row < (int)currentGlyphs.size() && currentGlyphs[row].edition == selectedEdition) {
+        selectedEntry = &currentGlyphs[row];
+    } else {
+        for (size_t i = 0; i < currentGlyphs.size(); ++i) {
+            if (currentGlyphs[i].edition == selectedEdition) {
+                selectedEntry = &currentGlyphs[i];
+                break;
+            }
+        }
+    }
+
+    if (!selectedEntry) {
+        QMessageBox::warning(this, tr("Direct Hub Link"), tr("No glyph selected or glyph edition not found."));
+        return;
+    }
+
+    // Copy required data by value to the stack to prevent Use-After-Free across modal unlock
+    uint16_t edition = selectedEdition;
+    QString carrierAddrQStr = selectedEntry->carrierAddress.trimmed();
+    std::string carrierAddrStr = carrierAddrQStr.toStdString();
+    uint256 glyphHash = selectedEntry->glyphHash;
+    selectedEntry = nullptr; // Invalidate raw pointer before modal operations
+
+    if (carrierAddrStr.empty() || carrierAddrQStr == tr("(unknown)")) {
+        QMessageBox::warning(this, tr("Direct Hub Link"), tr("Carrier address for this glyph is invalid or unknown."));
+        return;
+    }
+
+    CTxDestination dest = DecodeDestination(carrierAddrStr);
+    const CKeyID *pKeyID = boost::get<CKeyID>(&dest);
+    if (!pKeyID) {
+        QMessageBox::critical(this, tr("Direct Hub Link"), tr("The carrier address (%1) does not refer to a valid key.").arg(carrierAddrQStr));
+        return;
+    }
+    CKeyID keyID = *pKeyID;
+
+    CWallet* pwallet = (walletModel && walletModel->getWallet()) ? walletModel->getWallet() : pwalletMain;
+    if (!pwallet) {
+        QMessageBox::critical(this, tr("Direct Hub Link"), tr("Wallet is not available."));
+        return;
+    }
+
+    if (walletModel) {
+        WalletModel::UnlockContext ctx(walletModel->requestUnlock());
+        if (!ctx.isValid()) {
+            return; // Wallet unlock cancelled
+        }
+    }
+
+    CKey key;
+    if (!pwallet->GetKey(keyID, key)) {
+        QMessageBox::critical(this, tr("Direct Hub Link"), tr("Private key for carrier address (%1) is not available in this wallet.").arg(carrierAddrQStr));
+        return;
+    }
+
+    int64_t ts = GetTime();
+    std::string nonce = GetRandHash().ToString().substr(0, 16);
+    std::string canonicalGlyphHash = HexStr(glyphHash.begin(), glyphHash.end());
+
+    // Namespace-isolated message binding both canonical glyphHash and edition (NEW-15)
+    std::string msg = "qvnc:lsa:link:" + canonicalGlyphHash + ":" + std::to_string(edition) + ":" + 
+                      carrierAddrStr + ":" + std::to_string(ts) + ":" + nonce;
+
+    CHashWriter ss(SER_GETHASH, 0);
+    ss << strMessageMagic;
+    ss << msg;
+
+    std::vector<unsigned char> vchSig;
+    if (!key.SignCompact(ss.GetHash(), vchSig)) {
+        QMessageBox::critical(this, tr("Direct Hub Link"), tr("Failed to generate ECDSA cryptographic signature."));
+        return;
+    }
+
+    std::string sigBase64 = EncodeBase64(&vchSig[0], vchSig.size());
+    QString baseUrl = getHubBaseUrl();
+
+    // Prepare JSON payload for secure HTTPS POST (NEW-15: Zero signature in URL / Zero clipboard leakage)
+    QJsonObject payloadObj;
+    payloadObj["glyphHash"] = QString::fromStdString(canonicalGlyphHash);
+    payloadObj["edition"] = (int)edition;
+    payloadObj["carrierAddress"] = QString::fromStdString(carrierAddrStr);
+    payloadObj["timestamp"] = (qint64)ts;
+    payloadObj["nonce"] = QString::fromStdString(nonce);
+    payloadObj["signature"] = QString::fromStdString(sigBase64);
+
+    QByteArray postData = QJsonDocument(payloadObj).toJson(QJsonDocument::Compact);
+
+    QUrl requestUrl(baseUrl + "/api/sovereign-agent/link");
+    QNetworkRequest request(requestUrl);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    ui->btnOpenWebHub->setEnabled(false);
+    ui->btnOpenWebHub->setText(tr("Linking..."));
+
+    QNetworkReply *reply = lsaNetworkManager->post(request, postData);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, baseUrl, edition]() {
+        ui->btnOpenWebHub->setEnabled(true);
+        ui->btnOpenWebHub->setText(tr("Link to Web Hub"));
+
+        if (reply->error() != QNetworkReply::NoError) {
+            QMessageBox::warning(this, tr("Direct Hub Link"),
+                tr("Could not connect to Quavence Web Hub (%1).\nPlease check network connectivity.")
+                .arg(reply->errorString()));
+            reply->deleteLater();
+            return;
+        }
+
+        QByteArray respBytes = reply->readAll();
+        reply->deleteLater();
+
+        QJsonDocument doc = QJsonDocument::fromJson(respBytes);
+        if (!doc.isObject()) {
+            QMessageBox::warning(this, tr("Direct Hub Link"), tr("Invalid response format received from Web Hub."));
+            return;
+        }
+
+        QJsonObject respObj = doc.object();
+        QString sessionToken = respObj["sessionToken"].toString();
+        if (sessionToken.isEmpty()) {
+            QString errStr = respObj.contains("error") ? respObj["error"].toString() : tr("Session token missing.");
+            QMessageBox::warning(this, tr("Direct Hub Link"), tr("Direct Link failed: %1").arg(errStr));
+            return;
+        }
+
+        // Open browser with single-use session ticket (NO signature in URL, NO clipboard copying)
+        QString linkUrl = QString("%1/agents/link?ticket=%2").arg(baseUrl).arg(sessionToken);
+        QDesktopServices::openUrl(QUrl(linkUrl));
+
+        QMessageBox::information(this, tr("Direct Hub Link"),
+            tr("Secure Direct Hub Link established for Glyph #%1.\n\n"
+               "Opening verification session in your web browser.")
+            .arg(edition));
+    });
+}
+
+
+void GlyphsPage::onToggleIdPrivacyClicked()
+{
+    showConsumerId = !showConsumerId;
+    updateLinkStatusDisplay();
+}
+
+void GlyphsPage::updateLinkStatusDisplay()
+{
+    if (!isAgentLinked) {
+        ui->lblLinkStatus->setText(tr("Telegram: Not Linked"));
+        ui->lblLinkStatus->setStyleSheet("font-size: 10px; color: #475569; font-family: monospace;");
+        ui->btnToggleIdPrivacy->setVisible(false);
+        return;
+    }
+
+    ui->btnToggleIdPrivacy->setVisible(true);
+
+    if (showConsumerId) {
+        QString displayId = rawConsumerId.isEmpty() ? tr("tg:active") : rawConsumerId;
+        ui->lblLinkStatus->setText(QString(tr("Telegram: Linked (%1)")).arg(displayId));
+        ui->btnToggleIdPrivacy->setText(tr("Hide"));
+        ui->btnToggleIdPrivacy->setToolTip(tr("Mask private Telegram account ID"));
+    } else {
+        QString maskedId;
+        if (rawConsumerId.startsWith("tg:")) {
+            maskedId = "tg:••••••••";
+        } else if (!rawConsumerId.isEmpty()) {
+            maskedId = "••••••••";
+        } else {
+            maskedId = "tg:••••••••";
+        }
+        ui->lblLinkStatus->setText(QString(tr("Telegram: Linked (%1)")).arg(maskedId));
+        ui->btnToggleIdPrivacy->setText(tr("Show"));
+        ui->btnToggleIdPrivacy->setToolTip(tr("Reveal private Telegram account ID"));
+    }
+    ui->lblLinkStatus->setStyleSheet("font-size: 10px; color: #0284c7; font-family: monospace;");
 }

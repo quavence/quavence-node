@@ -161,7 +161,7 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
     aiWorkerTimer = new QTimer(this);
     connect(aiWorkerTimer, &QTimer::timeout, this, &OverviewPage::updateAiWorkerOverview);
     aiWorkerTimer->start(15000); // 15s
-    updateAiWorkerOverview();
+    // updateAiWorkerOverview deferred to timer/model
 
     connect(ui->listTransactions, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
 
