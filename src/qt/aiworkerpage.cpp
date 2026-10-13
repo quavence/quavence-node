@@ -147,9 +147,7 @@ AIWorkerPage::AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent) 
     isStreamFlushing(false),
     isStreamFinishing(false),
     currentTaskToolChoice(QJsonValue::Undefined),
-    streamBatchTimer(new QTimer(this)),
-    vramKeepAliveTimer(new QTimer(this)),
-    lastTaskExecutedTimeMs(QDateTime::currentMSecsSinceEpoch())
+    streamBatchTimer(new QTimer(this))
 {
     EnsureSslCertificatesLoaded();
     ui->setupUi(this);
@@ -234,9 +232,6 @@ AIWorkerPage::AIWorkerPage(const PlatformStyle *platformStyle, QWidget *parent) 
 
     streamBatchTimer->setSingleShot(true);
     connect(streamBatchTimer, &QTimer::timeout, this, &AIWorkerPage::flushStreamQueue);
-
-    connect(vramKeepAliveTimer, &QTimer::timeout, this, &AIWorkerPage::onVramKeepAliveTimer);
-    vramKeepAliveTimer->start(60000); // 60s periodic check
 
     logMessage(QString("Device identifier: %1").arg(workerDeviceId), "SYS");
     logMessage("All-in-One AI Worker initialized. Ready for DePIN tasks.", "SYS");
@@ -1339,7 +1334,6 @@ void AIWorkerPage::dispatchTask(const QString &taskId, const QString &taskType,
         return;
     }
     isTaskRunning = true;
-    lastTaskExecutedTimeMs = QDateTime::currentMSecsSinceEpoch();
     currentTaskId = taskId;
     currentTaskType = taskType;
     currentClaimNonce = claimNonce;
@@ -1847,7 +1841,6 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
     if (streamBatchTimer && streamBatchTimer->isActive()) {
         streamBatchTimer->stop();
     }
-    lastTaskExecutedTimeMs = QDateTime::currentMSecsSinceEpoch();
 
     if (!reply) {
         isTaskRunning = false;

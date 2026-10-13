@@ -77,7 +77,6 @@ private Q_SLOTS:
     void onHeartbeatTimer();
     void onClaimPollTimer();
     void onPeriodicRefresh();
-    void onVramKeepAliveTimer();
 
 private:
     Ui::AIWorkerPage *ui;
@@ -91,8 +90,6 @@ private:
     QTimer *claimPollTimer;
     QTimer *heartbeatDebounceTimer;
     QTimer *streamBatchTimer;
-    QTimer *vramKeepAliveTimer;
-    qint64 lastTaskExecutedTimeMs;
 
     bool isWorkerActive;
     bool isTokenEditing;
