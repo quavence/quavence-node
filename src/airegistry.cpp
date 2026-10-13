@@ -169,11 +169,24 @@ bool ExtractGlyphRecord(const CTxOut& out, GlyphCarrierRecord& record)
 
     if (data[4] != 0x01) return false; // version 1 only
 
-    record.version   = data[4];
-    record.opType    = data[5];
-    record.glyphHash = uint256(std::vector<unsigned char>(data.begin() + 6, data.begin() + 38));
-    record.edition   = (uint16_t)data[38] | ((uint16_t)data[39] << 8);
-    return true;
+    record.version = data[4];
+    record.opType  = data[5];
+
+    if (record.opType == 0x05) { // STATE_SYNC (44 bytes payload)
+        if (data.size() < 44) return false;
+        record.edition    = (uint16_t)data[6] | ((uint16_t)data[7] << 8);
+        record.glyphHash  = uint256(std::vector<unsigned char>(data.begin() + 8, data.begin() + 40));
+        record.cycleCount = (uint32_t)data[40] | ((uint32_t)data[41] << 8) |
+                            ((uint32_t)data[42] << 16) | ((uint32_t)data[43] << 24);
+        return true;
+    } else {
+        // Standard Glyph Operations (OpCodes 0x01 CLAIM, 0x02 GENESIS, 0x03 TRANSFER, 0x04 BURN)
+        if (data.size() < 40) return false;
+        record.glyphHash  = uint256(std::vector<unsigned char>(data.begin() + 6, data.begin() + 38));
+        record.edition    = (uint16_t)data[38] | ((uint16_t)data[39] << 8);
+        record.cycleCount = 0;
+        return true;
+    }
 }
 
 bool GetTxGlyphCarrier(const CTransaction& tx, unsigned int nOut, GlyphCarrierRecord& record)

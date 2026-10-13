@@ -550,6 +550,47 @@ BOOST_AUTO_TEST_CASE(multi_glyph_carrier_assignment_parity_fixture)
         GlyphCarrierRecord rec0;
         BOOST_CHECK(!GetTxGlyphCarrier(CTransaction(tx), 0, rec0));
     }
+
+    // Fixture 4: STATE_SYNC operation (0x05) 44-byte binary payload parsing & carrier binding
+    {
+        auto makeStateSyncScript = [](uint16_t edition, uint8_t rootByte, uint32_t cycleCount) -> CScript {
+            std::vector<unsigned char> data;
+            data.push_back('Q'); data.push_back('V'); data.push_back('N'); data.push_back('C');
+            data.push_back(0x01); // version 1
+            data.push_back(0x05); // opType = 0x05 (STATE_SYNC)
+            data.push_back((unsigned char)(edition & 0xFF));
+            data.push_back((unsigned char)((edition >> 8) & 0xFF));
+            for (int i = 0; i < 32; ++i) data.push_back(rootByte);
+            data.push_back((unsigned char)(cycleCount & 0xFF));
+            data.push_back((unsigned char)((cycleCount >> 8) & 0xFF));
+            data.push_back((unsigned char)((cycleCount >> 16) & 0xFF));
+            data.push_back((unsigned char)((cycleCount >> 24) & 0xFF));
+            CScript s;
+            s << OP_RETURN << data;
+            return s;
+        };
+
+        CMutableTransaction tx;
+        tx.vin.push_back(CTxIn());
+        tx.vout.push_back(CTxOut(GLYPH_CARRIER_DUST, destScript1));
+        tx.vout.push_back(CTxOut(0, makeStateSyncScript(555, 0x77, 42)));
+
+        // 1. Direct ExtractGlyphRecord verification on vout[1] (44-byte parsing)
+        GlyphCarrierRecord recDirect;
+        BOOST_CHECK(ExtractGlyphRecord(tx.vout[1], recDirect));
+        BOOST_CHECK_EQUAL(recDirect.edition, 555);
+        BOOST_CHECK_EQUAL(recDirect.opType, 0x05);
+        BOOST_CHECK_EQUAL(recDirect.cycleCount, 42);
+        std::vector<unsigned char> expectedHash(32, 0x77);
+        BOOST_CHECK(recDirect.glyphHash == uint256(expectedHash));
+
+        // 2. Carrier binding verification on vout[0]
+        GlyphCarrierRecord recCarrier;
+        BOOST_CHECK(GetTxGlyphCarrier(CTransaction(tx), 0, recCarrier));
+        BOOST_CHECK_EQUAL(recCarrier.edition, 555);
+        BOOST_CHECK_EQUAL(recCarrier.opType, 0x05);
+        BOOST_CHECK_EQUAL(recCarrier.cycleCount, 42);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

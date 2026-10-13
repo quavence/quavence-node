@@ -54,6 +54,9 @@ struct GlyphCarrierRecord {
     uint8_t  opType;
     uint256  glyphHash;
     uint16_t edition;
+    uint32_t cycleCount;
+
+    GlyphCarrierRecord() : version(0), opType(0), edition(0), cycleCount(0) {}
 };
 
 // ─── Parsing ─────────────────────────────────────────────────────────────────
