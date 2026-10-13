@@ -1198,34 +1198,6 @@ void AIWorkerPage::onClaimPollTimer()
     }
 }
 
-void AIWorkerPage::onVramKeepAliveTimer()
-{
-    if (!isWorkerActive || isTaskRunning) {
-        return;
-    }
-    qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (now - lastTaskExecutedTimeMs < 240000) { // 4 minutes
-        return;
-    }
-
-    lastTaskExecutedTimeMs = now;
-    QString baseUrl = getSelectedEndpointUrl();
-    QString modelsUrl = baseUrl.endsWith("/v1") ? baseUrl + "/models" : baseUrl + "/v1/models";
-    QNetworkRequest request(modelsUrl);
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    QNetworkReply *reply = networkManager->get(request);
-    // 3s watchdog timeout on VRAM keep-alive probe
-    QPointer<QNetworkReply> probeReplyPtr(reply);
-    QTimer::singleShot(3000, reply, [probeReplyPtr]() {
-        if (probeReplyPtr && probeReplyPtr->isRunning()) {
-            probeReplyPtr->abort();
-        }
-    });
-    connect(reply, &QNetworkReply::finished, this, [reply]() {
-        reply->deleteLater();
-    });
-}
-
 QJsonObject AIWorkerPage::buildRuntimeAttestation() const
 {
     QJsonObject attestation;
