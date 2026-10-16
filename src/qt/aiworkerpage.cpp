@@ -443,9 +443,14 @@ void AIWorkerPage::onToggleTokenVisibility()
 void AIWorkerPage::onToggleWorker(bool checked)
 {
     isWorkerActive = checked;
+    if (checked) {
+        preflightStatus = PreflightStatus::Standby;
+    }
     saveSettings();
     updateNodeStatusBadge();
     if (checked) {
+        if (!heartbeatTimer->isActive()) heartbeatTimer->start(30000);
+        if (!claimPollTimer->isActive()) claimPollTimer->start(5000);
         logMessage("AI Worker enabled. Syncing policy & starting task runner...", "SYS");
         fetchHubRuntimePolicy();
         sendHubHeartbeat();
@@ -511,6 +516,9 @@ QString AIWorkerPage::getSelectedEndpointUrl() const
 void AIWorkerPage::onPeriodicRefresh()
 {
     updatePoUSStatus();
+    if (!isWorkerActive || preflightStatus == PreflightStatus::TokenRequired) {
+        return;
+    }
     QString token = getWorkerToken();
     if (!token.isEmpty()) {
         QUrl url(getHubBaseUrl() + "/api/ai/nodes/self/overview");
@@ -526,6 +534,11 @@ void AIWorkerPage::onPeriodicRefresh()
         });
         connect(reply, &QNetworkReply::finished, this, [this, reply]() {
             reply->deleteLater();
+            int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            if (httpStatus == 401 || httpStatus == 403) {
+                handleFatalAuthFailure(httpStatus, "overview_auth_failed", "Worker overview unauthorized");
+                return;
+            }
             if (reply->error() != QNetworkReply::NoError) return;
             QByteArray data = reply->readAll();
             QJsonDocument doc = QJsonDocument::fromJson(data);
@@ -1117,6 +1130,13 @@ void AIWorkerPage::onHubPolicyReply(QNetworkReply *reply)
             isModelPolicyCompliant = isApprovedGenerationModel(currentModelName);
             updateNodeStatusBadge();
         }
+    } else {
+        int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if ((status == 401 || status == 403) && isWorkerActive) {
+            handleFatalAuthFailure(status, "policy_auth_failed", "Runtime policy fetch unauthorized (token revoked or deleted)");
+            reply->deleteLater();
+            return;
+        }
     }
     reply->deleteLater();
 }
@@ -1181,7 +1201,9 @@ void AIWorkerPage::onHubHeartbeatReply(QNetworkReply *reply)
         int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         QString err = reply->errorString();
         if (status == 401 || status == 403) {
-            logMessage(QString("Hub Heartbeat auth failed (%1). Verify Worker Token.").arg(status), "AUTH");
+            handleFatalAuthFailure(status, "auth_failed", "Node token is invalid, expired, or rig deleted");
+            reply->deleteLater();
+            return;
         } else if (status == 409 || status == 423) {
             logMessage(QString("Hub Heartbeat (%1): Device binding conflict. Reset binding if switching machines.").arg(status), "HUB");
         } else {
@@ -1289,6 +1311,11 @@ void AIWorkerPage::onHubClaimReply(QNetworkReply *reply)
             if (obj.contains("error")) detail = obj["error"].toString();
             if (obj.contains("reason")) detail += " (" + obj["reason"].toString() + ")";
             if (obj.contains("code")) detail += " [" + obj["code"].toString() + "]";
+        }
+        if (status == 401 || status == 403) {
+            handleFatalAuthFailure(status, "claim_auth_failed", detail.isEmpty() ? "Task claim unauthorized" : detail);
+            reply->deleteLater();
+            return;
         }
         if (status != 429 && status != 503 && status != 0) {
             logMessage(QString("Hub Claim queue (%1): %2 %3").arg(status).arg(reply->errorString(), detail), "HUB");
@@ -2087,7 +2114,13 @@ QString AIWorkerPage::computeHmacSha256(const QString &key, const QString &data)
 
 void AIWorkerPage::submitTaskResult(const QString &taskId, const QString &taskType, const QString &claimNonce, const QJsonObject &result)
 {
+    if (taskId.isEmpty() || !isWorkerActive) {
+        return;
+    }
     QString token = getWorkerToken();
+    if (token.isEmpty()) {
+        return;
+    }
     qint64 submitTimestamp = QDateTime::currentSecsSinceEpoch();
     QString submitIdempotencyKey = QUuid::createUuid().toString(QUuid::WithoutBraces);
 
@@ -2162,6 +2195,9 @@ void AIWorkerPage::onHubSubmitReply(QNetworkReply *reply)
         int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         QByteArray data = reply->readAll();
         logMessage(QString("Submit task %1 failed (%2): %3 %4").arg(currentTaskId).arg(status).arg(reply->errorString(), QString::fromUtf8(data)), "ERR");
+        if (status == 401 || status == 403) {
+            handleFatalAuthFailure(status, "submit_auth_failed", "Task submission unauthorized (token revoked or deleted)");
+        }
     }
 
     // RT-FINAL-01: Guaranteed full cleanup of task & tool state
@@ -2287,6 +2323,9 @@ void AIWorkerPage::onHubFailReply(QNetworkReply *reply, const QString &taskId)
         } else {
             logMessage(QString("Fail report for task %1 rejected by Hub (%2): %3 %4")
                 .arg(taskId).arg(status).arg(reply->errorString(), QString::fromUtf8(data)), "WARN");
+            if (status == 401 || status == 403) {
+                handleFatalAuthFailure(status, "fail_report_auth_failed", "Task failure report unauthorized (token revoked or deleted)");
+            }
         }
         reply->deleteLater();
     }
@@ -2309,4 +2348,55 @@ void AIWorkerPage::onHubFailReply(QNetworkReply *reply, const QString &taskId)
     currentClaimNonce = "";
     currentTurnInput = QJsonObject();
     updateNodeStatusBadge();
+}
+
+void AIWorkerPage::handleFatalAuthFailure(int httpStatus, const QString &errorCode, const QString &errorMessage)
+{
+    // 1. Atomic reset of task execution state
+    isWorkerActive = false;
+    isTaskRunning = false;
+    currentTaskIsControl = false;
+    currentTaskStreamRequested = false;
+    isTaskStreaming = false;
+    isStreamFlushing = false;
+    isStreamFinishing = false;
+    pendingStreamDeltas.clear();
+    pendingStreamToolCallsFrames.clear();
+    currentTaskTools = QJsonArray();
+    currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
+    accumulatedToolCalls = QJsonArray();
+    pendingFinishOutputText.clear();
+    currentTaskId = "";
+    currentTaskType = "";
+    currentClaimNonce = "";
+    currentTurnInput = QJsonObject();
+
+    // 2. Immediate stop of all polling timers
+    if (claimPollTimer && claimPollTimer->isActive()) claimPollTimer->stop();
+    if (heartbeatTimer && heartbeatTimer->isActive()) heartbeatTimer->stop();
+    if (heartbeatDebounceTimer && heartbeatDebounceTimer->isActive()) heartbeatDebounceTimer->stop();
+    if (streamBatchTimer && streamBatchTimer->isActive()) streamBatchTimer->stop();
+
+    // 3. Persistent save of workerEnabled = false on disk (No Dirty State)
+    saveSettings();
+
+    // 4. Update badge status to TokenRequired and unlock interface
+    preflightStatus = PreflightStatus::TokenRequired;
+    updateNodeStatusBadge();
+
+    // 5. Automatic switch of token input to editing mode
+    if (ui && ui->btnEditToken && ui->editWorkerToken) {
+        if (!isTokenEditing) {
+            isTokenEditing = true;
+            ui->editWorkerToken->setReadOnly(false);
+            ui->editWorkerToken->setFocus();
+            ui->editWorkerToken->selectAll();
+            ui->btnEditToken->setText("Save");
+            ui->btnEditToken->setStyleSheet("background-color: #2563eb; color: #ffffff; border: none; border-radius: 4px; padding: 4px 10px; font-weight: 600;");
+        }
+    }
+
+    // 6. Informative logging for operator
+    logMessage(QString("AI Worker stopped: Authentication rejected by Hub (HTTP %1: %2). Token is invalid or rig deleted. Please update your Worker Token to resume.")
+        .arg(httpStatus).arg(errorMessage.isEmpty() ? errorCode : errorMessage), "AUTH");
 }
