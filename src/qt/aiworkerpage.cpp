@@ -39,6 +39,7 @@
 #include <QtNetwork/QSslError>
 #include <QFile>
 #include <QSet>
+#include <QSysInfo>
 
 namespace {
     static const QString DEFAULT_HUB_BASE_URL = "https://quavence.com";
@@ -443,14 +444,9 @@ void AIWorkerPage::onToggleTokenVisibility()
 void AIWorkerPage::onToggleWorker(bool checked)
 {
     isWorkerActive = checked;
-    if (checked) {
-        preflightStatus = PreflightStatus::Standby;
-    }
     saveSettings();
     updateNodeStatusBadge();
     if (checked) {
-        if (!heartbeatTimer->isActive()) heartbeatTimer->start(30000);
-        if (!claimPollTimer->isActive()) claimPollTimer->start(5000);
         logMessage("AI Worker enabled. Syncing policy & starting task runner...", "SYS");
         fetchHubRuntimePolicy();
         sendHubHeartbeat();
@@ -508,7 +504,10 @@ QString AIWorkerPage::getSelectedEndpointUrl() const
 {
     QString url = ui->editEndpointUrl->text().trimmed();
     if (url.isEmpty()) {
-        return ui->comboProvider->currentIndex() == 0 ? DEFAULT_LM_STUDIO_URL : DEFAULT_OLLAMA_URL;
+        url = ui->comboProvider->currentIndex() == 0 ? DEFAULT_LM_STUDIO_URL : DEFAULT_OLLAMA_URL;
+    }
+    while (url.endsWith('/')) {
+        url.chop(1);
     }
     return url;
 }
@@ -516,9 +515,6 @@ QString AIWorkerPage::getSelectedEndpointUrl() const
 void AIWorkerPage::onPeriodicRefresh()
 {
     updatePoUSStatus();
-    if (!isWorkerActive || preflightStatus == PreflightStatus::TokenRequired) {
-        return;
-    }
     QString token = getWorkerToken();
     if (!token.isEmpty()) {
         QUrl url(getHubBaseUrl() + "/api/ai/nodes/self/overview");
@@ -534,11 +530,6 @@ void AIWorkerPage::onPeriodicRefresh()
         });
         connect(reply, &QNetworkReply::finished, this, [this, reply]() {
             reply->deleteLater();
-            int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-            if (httpStatus == 401 || httpStatus == 403) {
-                handleFatalAuthFailure(httpStatus, "overview_auth_failed", "Worker overview unauthorized");
-                return;
-            }
             if (reply->error() != QNetworkReply::NoError) return;
             QByteArray data = reply->readAll();
             QJsonDocument doc = QJsonDocument::fromJson(data);
@@ -1130,13 +1121,6 @@ void AIWorkerPage::onHubPolicyReply(QNetworkReply *reply)
             isModelPolicyCompliant = isApprovedGenerationModel(currentModelName);
             updateNodeStatusBadge();
         }
-    } else {
-        int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        if ((status == 401 || status == 403) && isWorkerActive) {
-            handleFatalAuthFailure(status, "policy_auth_failed", "Runtime policy fetch unauthorized (token revoked or deleted)");
-            reply->deleteLater();
-            return;
-        }
     }
     reply->deleteLater();
 }
@@ -1164,9 +1148,16 @@ void AIWorkerPage::sendHubHeartbeat()
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setRawHeader("Authorization", QString("Bearer %1").arg(token).toUtf8());
     request.setRawHeader("X-AI-Worker-Device-ID", workerDeviceId.toUtf8());
+    QString hwFingerprint = QCryptographicHash::hash(
+        QString("%1|%2").arg(QSysInfo::machineHostName(), workerDeviceId).toUtf8(),
+        QCryptographicHash::Sha256
+    ).toHex();
+    request.setRawHeader("X-AI-Worker-Hardware-Fingerprint", hwFingerprint.toUtf8());
 
     QJsonObject payload;
     payload["compute_ready"] = isWorkerActive;
+    payload["device_id"] = workerDeviceId;
+    payload["hardware_fingerprint"] = hwFingerprint;
     if (!isWorkerActive) {
         payload["reason"] = "Worker stopped by user";
     }
@@ -1201,9 +1192,7 @@ void AIWorkerPage::onHubHeartbeatReply(QNetworkReply *reply)
         int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         QString err = reply->errorString();
         if (status == 401 || status == 403) {
-            handleFatalAuthFailure(status, "auth_failed", "Node token is invalid, expired, or rig deleted");
-            reply->deleteLater();
-            return;
+            logMessage(QString("Hub Heartbeat auth failed (%1). Verify Worker Token.").arg(status), "AUTH");
         } else if (status == 409 || status == 423) {
             logMessage(QString("Hub Heartbeat (%1): Device binding conflict. Reset binding if switching machines.").arg(status), "HUB");
         } else {
@@ -1273,6 +1262,20 @@ void AIWorkerPage::onHubClaimReply(QNetworkReply *reply)
     if (reply->error() == QNetworkReply::NoError) {
         if (doc.isObject()) {
             QJsonObject root = doc.object();
+            if (root.value("code").toString() == "insufficient_stake") {
+                QString stakeDetail = "";
+                if (root.contains("stake_info") && root["stake_info"].isObject()) {
+                    QJsonObject si = root["stake_info"].toObject();
+                    stakeDetail = QString(" (Required: %1 QVNC, Balance: %2 QVNC)")
+                        .arg(si.value("required_stake").toDouble(0.0))
+                        .arg(si.value("current_balance").toDouble(0.0));
+                }
+                logMessage(QString("Staking Notice: Insufficient QVNC for higher tier%1. Falling back to Tier 1.").arg(stakeDetail), "STAKE");
+                updateNodeStatusBadge();
+                reply->deleteLater();
+                return;
+            }
+
             QJsonObject taskObj;
             if (root.contains("data") && root["data"].isObject()) {
                 taskObj = root["data"].toObject();
@@ -1312,11 +1315,6 @@ void AIWorkerPage::onHubClaimReply(QNetworkReply *reply)
             if (obj.contains("reason")) detail += " (" + obj["reason"].toString() + ")";
             if (obj.contains("code")) detail += " [" + obj["code"].toString() + "]";
         }
-        if (status == 401 || status == 403) {
-            handleFatalAuthFailure(status, "claim_auth_failed", detail.isEmpty() ? "Task claim unauthorized" : detail);
-            reply->deleteLater();
-            return;
-        }
         if (status != 429 && status != 503 && status != 0) {
             logMessage(QString("Hub Claim queue (%1): %2 %3").arg(status).arg(reply->errorString(), detail), "HUB");
         }
@@ -1344,6 +1342,7 @@ void AIWorkerPage::dispatchTask(const QString &taskId, const QString &taskType,
     currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
     accumulatedToolCalls = QJsonArray();
     pendingStreamToolCallsFrames.clear();
+    currentTaskUsage = QJsonObject();
 
     currentTaskStreamRequested = resultJson.value("stream_requested").toBool(false) ||
                                 resultJson.value("stream").toBool(false) ||
@@ -1393,6 +1392,7 @@ void AIWorkerPage::dispatchTask(const QString &taskId, const QString &taskType,
         currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
         accumulatedToolCalls = QJsonArray();
         pendingStreamToolCallsFrames.clear();
+        currentTaskUsage = QJsonObject();
         updateNodeStatusBadge();
         return;
     }
@@ -1476,6 +1476,7 @@ void AIWorkerPage::executeEmbeddingInference(const QJsonObject &resultJson)
         currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
         accumulatedToolCalls = QJsonArray();
         pendingStreamToolCallsFrames.clear();
+        currentTaskUsage = QJsonObject();
         updateNodeStatusBadge();
         return;
     }
@@ -1510,6 +1511,7 @@ void AIWorkerPage::executeEmbeddingInference(const QJsonObject &resultJson)
             currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
             accumulatedToolCalls = QJsonArray();
             pendingStreamToolCallsFrames.clear();
+            currentTaskUsage = QJsonObject();
             updateNodeStatusBadge();
             return;
         }
@@ -1541,6 +1543,7 @@ void AIWorkerPage::executeEmbeddingInference(const QJsonObject &resultJson)
                     finalResult["model"] = root.value("model").toString(bodyObj["model"].toString());
                     if (root.contains("usage") && root["usage"].isObject()) {
                         finalResult["usage"] = root["usage"].toObject();
+                        currentTaskUsage = root["usage"].toObject();
                     }
                     submitTaskResult(currentTaskId, currentTaskType, currentClaimNonce, finalResult);
                 } else {
@@ -1552,6 +1555,7 @@ void AIWorkerPage::executeEmbeddingInference(const QJsonObject &resultJson)
                     currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
                     accumulatedToolCalls = QJsonArray();
                     pendingStreamToolCallsFrames.clear();
+                    currentTaskUsage = QJsonObject();
                     updateNodeStatusBadge();
                 }
             } else {
@@ -1563,6 +1567,7 @@ void AIWorkerPage::executeEmbeddingInference(const QJsonObject &resultJson)
                 currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
                 accumulatedToolCalls = QJsonArray();
                 pendingStreamToolCallsFrames.clear();
+                currentTaskUsage = QJsonObject();
                 updateNodeStatusBadge();
             }
         } else {
@@ -1575,6 +1580,7 @@ void AIWorkerPage::executeEmbeddingInference(const QJsonObject &resultJson)
             currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
             accumulatedToolCalls = QJsonArray();
             pendingStreamToolCallsFrames.clear();
+            currentTaskUsage = QJsonObject();
             updateNodeStatusBadge();
         }
         reply->deleteLater();
@@ -1684,6 +1690,19 @@ void AIWorkerPage::sendStreamChunk(const QString &taskId, const QString &claimNo
     connect(reply, &QNetworkReply::finished, reply, &QObject::deleteLater);
 }
 
+static int extractJsonInt(const QJsonValue &val)
+{
+    if (val.isDouble()) {
+        return val.toInt(0);
+    }
+    if (val.isString()) {
+        bool ok = false;
+        int parsed = val.toString().trimmed().toInt(&ok);
+        return ok ? parsed : 0;
+    }
+    return 0;
+}
+
 void AIWorkerPage::onInferenceReadyRead(QNetworkReply *reply)
 {
     if (!reply) return;
@@ -1712,6 +1731,13 @@ void AIWorkerPage::onInferenceReadyRead(QNetworkReply *reply)
             QJsonDocument chunkDoc = QJsonDocument::fromJson(dataStr.toUtf8());
             if (chunkDoc.isObject()) {
                 QJsonObject chunkObj = chunkDoc.object();
+                if (chunkObj.contains("usage") && chunkObj["usage"].isObject()) {
+                    currentTaskUsage = chunkObj["usage"].toObject();
+                } else if (chunkObj.contains("eval_count")) {
+                    QJsonObject syntheticUsage;
+                    syntheticUsage["eval_count"] = extractJsonInt(chunkObj.value("eval_count"));
+                    currentTaskUsage = syntheticUsage;
+                }
                 if (chunkObj.contains("choices") && chunkObj["choices"].isArray()) {
                     QJsonArray choices = chunkObj["choices"].toArray();
                     if (!choices.isEmpty()) {
@@ -1779,6 +1805,11 @@ void AIWorkerPage::executeInference(const QString &systemPrompt, const QString &
     bodyObj["temperature"] = 0.2;
     bodyObj["max_tokens"] = 2048;
     bodyObj["stream"] = currentTaskStreamRequested;
+    if (currentTaskStreamRequested) {
+        QJsonObject streamOptions;
+        streamOptions["include_usage"] = true;
+        bodyObj["stream_options"] = streamOptions;
+    }
 
     // RED-05: Attach tools and tool_choice if present
     if (!currentTaskTools.isEmpty()) {
@@ -1850,6 +1881,7 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
         currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
         accumulatedToolCalls = QJsonArray();
         pendingStreamToolCallsFrames.clear();
+        currentTaskUsage = QJsonObject();
         updateNodeStatusBadge();
         return;
     }
@@ -1868,6 +1900,13 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
                         QJsonDocument chunkDoc = QJsonDocument::fromJson(dataStr.toUtf8());
                         if (chunkDoc.isObject()) {
                             QJsonObject chunkObj = chunkDoc.object();
+                            if (chunkObj.contains("usage") && chunkObj["usage"].isObject()) {
+                                currentTaskUsage = chunkObj["usage"].toObject();
+                            } else if (chunkObj.contains("eval_count")) {
+                                QJsonObject syntheticUsage;
+                                syntheticUsage["eval_count"] = extractJsonInt(chunkObj.value("eval_count"));
+                                currentTaskUsage = syntheticUsage;
+                            }
                             if (chunkObj.contains("choices") && chunkObj["choices"].isArray()) {
                                 QJsonArray choices = chunkObj["choices"].toArray();
                                 if (!choices.isEmpty()) {
@@ -1908,6 +1947,13 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
 
             if (doc.isObject()) {
                 QJsonObject root = doc.object();
+                if (root.contains("usage") && root["usage"].isObject()) {
+                    currentTaskUsage = root["usage"].toObject();
+                } else if (root.contains("eval_count")) {
+                    QJsonObject syntheticUsage;
+                    syntheticUsage["eval_count"] = extractJsonInt(root.value("eval_count"));
+                    currentTaskUsage = syntheticUsage;
+                }
                 if (root.contains("choices") && root["choices"].isArray()) {
                     QJsonArray choices = root["choices"].toArray();
                     if (!choices.isEmpty()) {
@@ -1967,6 +2013,7 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
             currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
             accumulatedToolCalls = QJsonArray();
             pendingFinishOutputText.clear();
+            currentTaskUsage = QJsonObject();
             updateNodeStatusBadge();
         }
     } else {
@@ -2013,6 +2060,7 @@ void AIWorkerPage::onInferenceReply(QNetworkReply *reply)
             currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
             accumulatedToolCalls = QJsonArray();
             pendingFinishOutputText.clear();
+            currentTaskUsage = QJsonObject();
             updateNodeStatusBadge();
         }
     }
@@ -2114,17 +2162,19 @@ QString AIWorkerPage::computeHmacSha256(const QString &key, const QString &data)
 
 void AIWorkerPage::submitTaskResult(const QString &taskId, const QString &taskType, const QString &claimNonce, const QJsonObject &result)
 {
-    if (taskId.isEmpty() || !isWorkerActive) {
-        return;
-    }
     QString token = getWorkerToken();
-    if (token.isEmpty()) {
-        return;
-    }
     qint64 submitTimestamp = QDateTime::currentSecsSinceEpoch();
     QString submitIdempotencyKey = QUuid::createUuid().toString(QUuid::WithoutBraces);
 
-    QString resultJsonString = canonicalJson(result);
+    QString cleanTaskId = taskId;
+    cleanTaskId.remove('-');
+    QString challengeNonce = cleanTaskId.left(12);
+    QString runtimeProof = computeHmacSha256(challengeNonce, QString("%1:%2").arg(workerDeviceId, taskId));
+
+    QJsonObject mutableResult = result;
+    mutableResult["runtime_proof"] = runtimeProof;
+
+    QString resultJsonString = canonicalJson(mutableResult);
     QString resultHash = QCryptographicHash::hash(resultJsonString.toUtf8(), QCryptographicHash::Sha256).toHex();
     QString signaturePayload = QString("%1.%2.%3.%4").arg(taskId, claimNonce, QString::number(submitTimestamp), resultHash);
     QString signature = computeHmacSha256(token, signaturePayload);
@@ -2136,7 +2186,8 @@ void AIWorkerPage::submitTaskResult(const QString &taskId, const QString &taskTy
     request.setRawHeader("X-AI-Worker-Device-ID", workerDeviceId.toUtf8());
 
     QJsonObject payload;
-    payload["result_json"] = result;
+    payload["result_json"] = mutableResult;
+    payload["runtime_proof"] = runtimeProof;
     payload["claim_nonce"] = claimNonce;
     payload["submit_timestamp"] = submitTimestamp;
     payload["submit_idempotency_key"] = submitIdempotencyKey;
@@ -2146,6 +2197,48 @@ void AIWorkerPage::submitTaskResult(const QString &taskId, const QString &taskTy
     payload["model"] = currentModelName;
     payload["embedding_model"] = hubRequiredEmbedModel;
     payload["runtime_policy_version"] = hubPolicyVersion;
+
+    QJsonObject effectiveUsage;
+    if (mutableResult.contains("usage") && mutableResult.value("usage").isObject()) {
+        effectiveUsage = mutableResult.value("usage").toObject();
+    } else if (!currentTaskUsage.isEmpty()) {
+        effectiveUsage = currentTaskUsage;
+        mutableResult["usage"] = currentTaskUsage;
+    }
+
+    int extractedTokens = 0;
+    if (taskType == "TASK_EMBEDDING") {
+        if (effectiveUsage.contains("total_tokens")) {
+            extractedTokens = extractJsonInt(effectiveUsage.value("total_tokens"));
+        } else if (effectiveUsage.contains("prompt_tokens")) {
+            extractedTokens = extractJsonInt(effectiveUsage.value("prompt_tokens"));
+        }
+    } else {
+        if (effectiveUsage.contains("completion_tokens")) {
+            extractedTokens = extractJsonInt(effectiveUsage.value("completion_tokens"));
+        } else if (effectiveUsage.contains("eval_count")) {
+            extractedTokens = extractJsonInt(effectiveUsage.value("eval_count"));
+        }
+    }
+
+    if (extractedTokens <= 0 && mutableResult.contains("output_tokens")) {
+        extractedTokens = extractJsonInt(mutableResult.value("output_tokens"));
+    }
+
+    // Fail-Closed Guard (Rule 2 & Rule 5): Strict prohibition of heuristic guessing.
+    // If inference backend failed to report token count, refuse to submit invalid data to Hub.
+    if (extractedTokens <= 0) {
+        logMessage(QString("Fail-Closed: Inference engine failed to return valid token count for task %1 (type: %2). Reporting task failure.").arg(taskId, taskType), "WARN");
+        QJsonObject failDetails;
+        failDetails["error"] = "missing_completion_tokens";
+        failDetails["task_type"] = taskType;
+        failDetails["reason"] = "Inference engine omitted completion_tokens/eval_count/total_tokens";
+        reportTaskFailure(taskId, "missing_completion_tokens", "Inference engine omitted token counts", failDetails);
+        return;
+    }
+
+    payload["output_tokens"] = extractedTokens;
+    mutableResult["output_tokens"] = extractedTokens;
 
     QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
     QNetworkReply *reply = networkManager->post(request, body);
@@ -2178,6 +2271,7 @@ void AIWorkerPage::onHubSubmitReply(QNetworkReply *reply)
         currentTaskType = "";
         currentClaimNonce = "";
         currentTurnInput = QJsonObject();
+        currentTaskUsage = QJsonObject();
         updateNodeStatusBadge();
         return;
     }
@@ -2195,9 +2289,6 @@ void AIWorkerPage::onHubSubmitReply(QNetworkReply *reply)
         int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         QByteArray data = reply->readAll();
         logMessage(QString("Submit task %1 failed (%2): %3 %4").arg(currentTaskId).arg(status).arg(reply->errorString(), QString::fromUtf8(data)), "ERR");
-        if (status == 401 || status == 403) {
-            handleFatalAuthFailure(status, "submit_auth_failed", "Task submission unauthorized (token revoked or deleted)");
-        }
     }
 
     // RT-FINAL-01: Guaranteed full cleanup of task & tool state
@@ -2217,6 +2308,7 @@ void AIWorkerPage::onHubSubmitReply(QNetworkReply *reply)
     currentTaskType = "";
     currentClaimNonce = "";
     currentTurnInput = QJsonObject();
+    currentTaskUsage = QJsonObject();
     updateNodeStatusBadge();
     reply->deleteLater();
 }
@@ -2274,6 +2366,7 @@ void AIWorkerPage::reportTaskFailure(const QString &taskId, const QString &reaso
         currentTaskType = "";
         currentClaimNonce = "";
         currentTurnInput = QJsonObject();
+        currentTaskUsage = QJsonObject();
         updateNodeStatusBadge();
         return;
     }
@@ -2323,9 +2416,6 @@ void AIWorkerPage::onHubFailReply(QNetworkReply *reply, const QString &taskId)
         } else {
             logMessage(QString("Fail report for task %1 rejected by Hub (%2): %3 %4")
                 .arg(taskId).arg(status).arg(reply->errorString(), QString::fromUtf8(data)), "WARN");
-            if (status == 401 || status == 403) {
-                handleFatalAuthFailure(status, "fail_report_auth_failed", "Task failure report unauthorized (token revoked or deleted)");
-            }
         }
         reply->deleteLater();
     }
@@ -2347,56 +2437,6 @@ void AIWorkerPage::onHubFailReply(QNetworkReply *reply, const QString &taskId)
     currentTaskType = "";
     currentClaimNonce = "";
     currentTurnInput = QJsonObject();
+    currentTaskUsage = QJsonObject();
     updateNodeStatusBadge();
-}
-
-void AIWorkerPage::handleFatalAuthFailure(int httpStatus, const QString &errorCode, const QString &errorMessage)
-{
-    // 1. Atomic reset of task execution state
-    isWorkerActive = false;
-    isTaskRunning = false;
-    currentTaskIsControl = false;
-    currentTaskStreamRequested = false;
-    isTaskStreaming = false;
-    isStreamFlushing = false;
-    isStreamFinishing = false;
-    pendingStreamDeltas.clear();
-    pendingStreamToolCallsFrames.clear();
-    currentTaskTools = QJsonArray();
-    currentTaskToolChoice = QJsonValue(QJsonValue::Undefined);
-    accumulatedToolCalls = QJsonArray();
-    pendingFinishOutputText.clear();
-    currentTaskId = "";
-    currentTaskType = "";
-    currentClaimNonce = "";
-    currentTurnInput = QJsonObject();
-
-    // 2. Immediate stop of all polling timers
-    if (claimPollTimer && claimPollTimer->isActive()) claimPollTimer->stop();
-    if (heartbeatTimer && heartbeatTimer->isActive()) heartbeatTimer->stop();
-    if (heartbeatDebounceTimer && heartbeatDebounceTimer->isActive()) heartbeatDebounceTimer->stop();
-    if (streamBatchTimer && streamBatchTimer->isActive()) streamBatchTimer->stop();
-
-    // 3. Persistent save of workerEnabled = false on disk (No Dirty State)
-    saveSettings();
-
-    // 4. Update badge status to TokenRequired and unlock interface
-    preflightStatus = PreflightStatus::TokenRequired;
-    updateNodeStatusBadge();
-
-    // 5. Automatic switch of token input to editing mode
-    if (ui && ui->btnEditToken && ui->editWorkerToken) {
-        if (!isTokenEditing) {
-            isTokenEditing = true;
-            ui->editWorkerToken->setReadOnly(false);
-            ui->editWorkerToken->setFocus();
-            ui->editWorkerToken->selectAll();
-            ui->btnEditToken->setText("Save");
-            ui->btnEditToken->setStyleSheet("background-color: #2563eb; color: #ffffff; border: none; border-radius: 4px; padding: 4px 10px; font-weight: 600;");
-        }
-    }
-
-    // 6. Informative logging for operator
-    logMessage(QString("AI Worker stopped: Authentication rejected by Hub (HTTP %1: %2). Token is invalid or rig deleted. Please update your Worker Token to resume.")
-        .arg(httpStatus).arg(errorMessage.isEmpty() ? errorCode : errorMessage), "AUTH");
 }

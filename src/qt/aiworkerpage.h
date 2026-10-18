@@ -132,6 +132,7 @@ private:
     QJsonValue currentTaskToolChoice;
     QJsonArray accumulatedToolCalls;
     QList<QJsonObject> pendingStreamToolCallsFrames;
+    QJsonObject currentTaskUsage;
 
     void logMessage(const QString &msg, const QString &level = "INFO");
     void updateBoostUI();
@@ -158,7 +159,6 @@ private:
     void flushStreamQueue();
     void finalizeTaskInference(const QString &outputText);
     void sendStreamChunk(const QString &taskId, const QString &claimNonce, int seq, const QString &delta, const QString &type = "chunk");
-    void handleFatalAuthFailure(int httpStatus, const QString &errorCode, const QString &errorMessage);
     void submitTaskResult(const QString &taskId, const QString &taskType, const QString &claimNonce, const QJsonObject &result);
     void reportTaskFailure(const QString &taskId, const QString &reasonCode, const QString &errorMessage, const QJsonObject &details);
 
