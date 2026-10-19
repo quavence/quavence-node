@@ -386,6 +386,27 @@ uint32_t GetWorkerCreditsInWindow(const CKeyID& workerID, int currentHeight)
     return total;
 }
 
+uint32_t GetMaxWorkerCreditsForKeys(const std::set<CKeyID>& keys, int currentHeight)
+{
+    if (keys.empty()) return 0;
+    LOCK(cs_airegistry);
+    int minH = std::max(0, currentHeight - AI_ATTESTATION_WINDOW);
+    std::map<CKeyID, uint32_t> aggregated;
+    for (std::map<int, std::map<CKeyID, uint32_t> >::const_iterator it = mapHeightToWorkerCredits.lower_bound(minH);
+         it != mapHeightToWorkerCredits.end() && it->first <= currentHeight; ++it) {
+        for (std::map<CKeyID, uint32_t>::const_iterator wit = it->second.begin(); wit != it->second.end(); ++wit) {
+            if (keys.find(wit->first) != keys.end()) {
+                aggregated[wit->first] += wit->second;
+            }
+        }
+    }
+    uint32_t maxCredits = 0;
+    for (std::map<CKeyID, uint32_t>::const_iterator it = aggregated.begin(); it != aggregated.end(); ++it) {
+        if (it->second > maxCredits) maxCredits = it->second;
+    }
+    return maxCredits;
+}
+
 int GetWorkerPoUSBoost(uint32_t credits)
 {
     if (credits == 0)  return 0;

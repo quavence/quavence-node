@@ -103,6 +103,7 @@ private:
     int attestationCount;
     int currentBoostPercent;
     int tasksCompletedCount;
+    qint64 claimBackoffUntil;
 
     // Hub Policy & Runtime Probing
     QString hubPolicyVersion;

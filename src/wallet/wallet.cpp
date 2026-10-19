@@ -3735,35 +3735,48 @@ CAmount CWallet::GetWatchOnlyStake() const
     return nTotal;
 }
 
-uint64_t CWallet::GetStakeWeight() const
+uint64_t CWallet::GetStakeWeight(uint64_t* pnEffectiveWeight, int* pnBoostPercent) const
 {
-    // Choose coins to use
     CAmount nBalance = GetBalance();
-
-    if (nBalance <= nReserveBalance)
+    if (nBalance <= nReserveBalance) {
+        if (pnEffectiveWeight) *pnEffectiveWeight = 0;
+        if (pnBoostPercent) *pnBoostPercent = 0;
         return 0;
-
-    vector<const CWalletTx*> vwtxPrev;
+    }
 
     set<pair<const CWalletTx*,unsigned int> > setCoins;
     CAmount nValueIn = 0;
-
     CAmount nTargetValue = nBalance - nReserveBalance;
-    if (!SelectCoinsForStaking(nTargetValue, setCoins, nValueIn))
+    if (!SelectCoinsForStaking(nTargetValue, setCoins, nValueIn) || setCoins.empty()) {
+        if (pnEffectiveWeight) *pnEffectiveWeight = 0;
+        if (pnBoostPercent) *pnBoostPercent = 0;
         return 0;
-
-    if (setCoins.empty())
-        return 0;
-
-    uint64_t nWeight = 0;
-
-    LOCK2(cs_main, cs_wallet);
-    BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
-    {
-		if (pcoin.first->GetDepthInMainChain() >= Params().GetConsensus().nCoinbaseMaturity)
-			nWeight += pcoin.first->vout[pcoin.second].nValue;
     }
 
+    uint64_t nWeight = 0;
+    uint64_t nEffectiveWeight = 0;
+    int maxBoost = 0;
+
+    LOCK2(cs_main, cs_wallet);
+    CBlockIndex* pindexTip = chainActive.Tip();
+
+    BOOST_FOREACH(PAIRTYPE(const CWalletTx*, unsigned int) pcoin, setCoins)
+    {
+        if (pcoin.first->GetDepthInMainChain() >= Params().GetConsensus().nCoinbaseMaturity) {
+            CAmount val = pcoin.first->vout[pcoin.second].nValue;
+            nWeight += val;
+            int boost = pindexTip ? GetAiStakeBoost(pcoin.first->vout[pcoin.second].scriptPubKey, pindexTip) : 0;
+            if (boost > maxBoost) maxBoost = boost;
+            uint64_t effectiveVal = val;
+            if (boost > 0 && boost <= MAX_AI_BOOST_PERCENT) {
+                effectiveVal = (val * (100 + boost)) / 100;
+            }
+            nEffectiveWeight += effectiveVal;
+        }
+    }
+
+    if (pnEffectiveWeight) *pnEffectiveWeight = nEffectiveWeight;
+    if (pnBoostPercent) *pnBoostPercent = maxBoost;
     return nWeight;
 }
 

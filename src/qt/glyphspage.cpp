@@ -466,11 +466,24 @@ void GlyphsPage::onTransferClicked()
     }
 
     const GlyphEntry& g = currentGlyphs[row];
-    GlyphTransferDialog dlg(platformStyle, g.edition, g.glyphHash, g.txid, g.vout, g.carrierAddress, this);
+    GlyphTransferDialog dlg(platformStyle, g.edition, g.glyphHash, g.txid, g.vout, g.carrierAddress, g.confirmations, this);
     dlg.setWalletModel(walletModel);
     if (dlg.exec() == QDialog::Accepted) {
         updateGlyphs();
     }
+}
+
+void GlyphsPage::onLockGlyphClicked()
+{
+    int row = ui->tableGlyphs->currentRow();
+    if (row < 0 || row >= (int)currentGlyphs.size()) return;
+    const GlyphEntry &g = currentGlyphs[row];
+    if (!walletModel || !walletModel->getWallet()) return;
+    {
+        LOCK2(cs_main, walletModel->getWallet()->cs_wallet);
+        walletModel->getWallet()->LockCoin(COutPoint(g.txid, g.vout));
+    }
+    updateGlyphs();
 }
 
 void GlyphsPage::onExplorerClicked()
@@ -554,6 +567,9 @@ void GlyphsPage::onCustomContextMenu(const QPoint &pos)
     contextMenu.addAction(tr("Copy Edition (#%1)").arg(g.edition), this, SLOT(onCopyEditionClicked()));
 
     contextMenu.addSeparator();
+    if (!g.isLocked) {
+        contextMenu.addAction(tr("Restore Auto-Lock Protection"), this, SLOT(onLockGlyphClicked()));
+    }
     contextMenu.addAction(tr("Safe Transfer Selected Glyph..."), this, SLOT(onTransferClicked()));
     contextMenu.addAction(tr("View in Quavence Explorer"), this, SLOT(onExplorerClicked()));
 
@@ -576,6 +592,7 @@ void GlyphsPage::requestAgentState(uint16_t edition)
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     QNetworkReply *reply = lsaNetworkManager->get(request);
+    reply->setProperty("edition", edition);
     connect(reply, SIGNAL(finished()), this, SLOT(onAgentStateReply()));
 }
 
@@ -583,6 +600,12 @@ void GlyphsPage::onAgentStateReply()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     if (!reply) return;
+
+    uint16_t replyEdition = reply->property("edition").toUInt();
+    if (replyEdition != selectedEdition || selectedEdition == 0) {
+        reply->deleteLater();
+        return; // Discard stale asynchronous packet from previously selected glyph
+    }
 
     if (reply->error() != QNetworkReply::NoError) {
         ui->lblDailyQuota->setText(tr("Daily Quota: [OFFLINE]"));
@@ -688,6 +711,8 @@ void GlyphsPage::requestAgentPreview(uint16_t edition, const QString &phase)
     QUrl url(getHubBaseUrl() + "/api/sovereign-agent/" + QString::number(edition) + "/preview.png?phase=" + phase);
     QNetworkRequest request(url);
     QNetworkReply *reply = lsaNetworkManager->get(request);
+    reply->setProperty("edition", edition);
+    reply->setProperty("previewKey", QString("%1_%2").arg(edition).arg(phase));
     connect(reply, SIGNAL(finished()), this, SLOT(onAgentPreviewReply()));
 }
 
@@ -695,6 +720,13 @@ void GlyphsPage::onAgentPreviewReply()
 {
     QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
     if (!reply) return;
+
+    uint16_t replyEdition = reply->property("edition").toUInt();
+    QString previewKey = reply->property("previewKey").toString();
+    if (replyEdition != selectedEdition || selectedEdition == 0 || previewKey != lastLoadedPreviewKey) {
+        reply->deleteLater();
+        return; // Discard stale image packet
+    }
 
     if (reply->error() == QNetworkReply::NoError) {
         QByteArray imgData = reply->readAll();

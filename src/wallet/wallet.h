@@ -936,7 +936,7 @@ public:
     bool SelectCoinsForStaking(CAmount& nTargetValue, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet) const;
     void AvailableCoinsForStaking(std::vector<COutput>& vCoins) const;
     bool HaveAvailableCoinsForStaking() const;
-    uint64_t GetStakeWeight() const;
+    uint64_t GetStakeWeight(uint64_t* pnEffectiveWeight = nullptr, int* pnBoostPercent = nullptr) const;
 
     /* Returns the wallets help message */
     static std::string GetWalletHelpString(bool showDebug);
