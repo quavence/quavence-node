@@ -426,14 +426,17 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
             "Returns an object containing staking-related information.");
 
     uint64_t nWeight = 0;
+    uint64_t nEffectiveWeight = 0;
+    int nBoostPercent = 0;
 #ifdef ENABLE_WALLET
     if (pwalletMain)
-        nWeight = pwalletMain->GetStakeWeight();
+        nWeight = pwalletMain->GetStakeWeight(&nEffectiveWeight, &nBoostPercent);
 #endif
 
     uint64_t nNetworkWeight = 1.1429 * GetPoSKernelPS();
-    bool staking = nLastCoinStakeSearchInterval && nWeight;
-    uint64_t nExpectedTime = staking ? 1.0455 * 64 * nNetworkWeight / nWeight : 0;
+    uint64_t nCalcWeight = (nEffectiveWeight > 0) ? nEffectiveWeight : nWeight;
+    bool staking = nLastCoinStakeSearchInterval && nCalcWeight;
+    uint64_t nExpectedTime = staking ? 1.0455 * 64 * nNetworkWeight / nCalcWeight : 0;
 
     UniValue obj(UniValue::VOBJ);
 
@@ -449,6 +452,8 @@ UniValue getstakinginfo(const UniValue& params, bool fHelp)
     obj.push_back(Pair("search-interval", (int)nLastCoinStakeSearchInterval));
 
     obj.push_back(Pair("weight", (uint64_t)nWeight));
+    obj.push_back(Pair("effectiveweight", (uint64_t)nEffectiveWeight));
+    obj.push_back(Pair("pous_boost", nBoostPercent));
     obj.push_back(Pair("netstakeweight", (uint64_t)nNetworkWeight));
 
     obj.push_back(Pair("expectedtime", nExpectedTime));

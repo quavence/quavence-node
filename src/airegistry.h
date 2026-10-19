@@ -82,6 +82,7 @@ void UnregisterAiAttestationsInBlock(const CBlock& block, int nHeight);
 
 int      GetAiAttestationsCountInWindow(int currentHeight);
 uint32_t GetWorkerCreditsInWindow(const CKeyID& workerID, int currentHeight);
+uint32_t GetMaxWorkerCreditsForKeys(const std::set<CKeyID>& keys, int currentHeight);
 int      GetWorkerPoUSBoost(uint32_t credits);
 
 // Main consensus boost calculation by stake scriptPubKey (zero disk I/O)

@@ -54,6 +54,7 @@ public Q_SLOTS:
     void onCopyUtxoClicked();
     void onCopyEditionClicked();
     void onCustomContextMenu(const QPoint &pos);
+    void onLockGlyphClicked();
 
     // Compute Pass Slots
     void onAgentStateReply();

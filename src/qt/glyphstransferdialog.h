@@ -26,6 +26,7 @@ public:
                                  const uint256 &carrierTxid,
                                  unsigned int carrierVout,
                                  const QString &currentAddress,
+                                 int confirmations,
                                  QWidget *parent = nullptr);
     ~GlyphTransferDialog();
 
@@ -47,6 +48,7 @@ private:
     uint256 m_carrierTxid;
     unsigned int m_carrierVout;
     QString m_currentAddress;
+    int m_confirmations;
 };
 
 #endif // BITCOIN_QT_GLYPHTRANSFERDIALOG_H

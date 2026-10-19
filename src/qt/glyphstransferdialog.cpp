@@ -26,6 +26,7 @@ GlyphTransferDialog::GlyphTransferDialog(const PlatformStyle *_platformStyle,
                                          const uint256 &carrierTxid,
                                          unsigned int carrierVout,
                                          const QString &currentAddress,
+                                         int confirmations,
                                          QWidget *parent) :
     QDialog(parent),
     ui(new Ui::GlyphTransferDialog),
@@ -35,7 +36,8 @@ GlyphTransferDialog::GlyphTransferDialog(const PlatformStyle *_platformStyle,
     m_glyphHash(glyphHash),
     m_carrierTxid(carrierTxid),
     m_carrierVout(carrierVout),
-    m_currentAddress(currentAddress)
+    m_currentAddress(currentAddress),
+    m_confirmations(confirmations)
 {
     ui->setupUi(this);
 
@@ -100,6 +102,21 @@ void GlyphTransferDialog::onTransferClicked()
         return;
     }
 
+    if (m_confirmations == 0) {
+        QMessageBox::StandardButton warnReply = QMessageBox::warning(
+            this,
+            tr("Unconfirmed Glyph Warning"),
+            tr("WARNING: This PoUS Glyph has 0 on-chain confirmations (currently in mempool).\n\n"
+               "Transferring an unconfirmed glyph carries the risk of transaction invalidation if the parent transaction is evicted or reorganized.\n\n"
+               "Do you still want to proceed?"),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No
+        );
+        if (warnReply != QMessageBox::Yes) {
+            return;
+        }
+    }
+
     QString confirmText = tr("Are you sure you want to transfer PoUS Glyph Edition #%1 to:\n\n%2\n\n"
                              "This will send the 10,000 sat carrier UTXO with the 40-byte OP_RETURN transfer payload.")
         .arg(m_edition)
@@ -154,7 +171,7 @@ void GlyphTransferDialog::onTransferClicked()
     CWalletTx wtxNew;
     CReserveKey reservekey(wallet);
     CAmount nFeeRet = 0;
-    int nChangePosRet = -1;
+    int nChangePosRet = (int)vecSend.size(); // Index 2 (after rCarrier on 0 and rOpReturn on 1)
     std::string strFailReason;
 
     bool wasLocked = false;

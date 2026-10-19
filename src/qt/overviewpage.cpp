@@ -345,14 +345,12 @@ void OverviewPage::updateAiWorkerOverview()
             }
         }
 
-        if (pwalletMain) {
+        if (pwalletMain && localCredits < 51) {
             std::set<CKeyID> setKeys;
             pwalletMain->GetKeys(setKeys);
-            for (std::set<CKeyID>::const_iterator it = setKeys.begin(); it != setKeys.end(); ++it) {
-                uint32_t c = GetWorkerCreditsInWindow(*it, height);
-                if (c > localCredits) {
-                    localCredits = c;
-                }
+            uint32_t walletMaxCredits = GetMaxWorkerCreditsForKeys(setKeys, height);
+            if (walletMaxCredits > localCredits) {
+                localCredits = walletMaxCredits;
             }
         }
         localWorkerBoost = GetWorkerPoUSBoost(localCredits);
