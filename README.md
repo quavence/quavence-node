@@ -39,6 +39,16 @@ At block 0 (Genesis), a fixed allocation of 50,000.00000000 QVNC was minted into
 
 ---
 
+## 🪙 Supply Cap & Consensus Emission Model (200,000 QVNC)
+
+Quavence enforces a strict mathematical supply ceiling of **200,000.00000000 QVNC** following the canonical Bitcoin Core UTXO emission architecture:
+
+* **Geometric Decay Table (`src/consensus/subsidy_schedule.h`)**: The issuance schedule consists of 704 discrete decay eras of 500,000 blocks each. The cumulative sum of all era subsidies equals exactly `SUBSIDY_POS_CAP_UNITS` (200,000.00000000 QVNC), verified by test `subsidy_table_totals_to_pos_cap`.
+* **Consensus Enforcement (`src/main.cpp:1788-1798`, `ConnectBlock:2731`)**: For any block, `GetProofOfStakeSubsidy(nHeight)` yields the strictly bounded era reward. Beyond the final era (> block 352,000,000), `GetProofOfStakeSubsidy` returns `0`. Any coinstake attempting to claim greater than `nFees + GetProofOfStakeSubsidy(nHeight)` is instantly rejected at consensus level with maximum ban penalty: `state.DoS(100, "bad-cs-amount")`.
+* **State Invariant**: In accordance with Bitcoin Core consensus design, cumulative supply is governed by deterministic per-block limits rather than a mutable global state counter, ensuring total immunity against chain reorganization (reorg) state corruption.
+
+---
+
 ## Building from Source (Linux / Ubuntu / Debian)
 
 ### 1. Install Dependencies
