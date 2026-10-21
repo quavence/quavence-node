@@ -21,6 +21,24 @@ Quavence (QVNC) is a decentralized Layer-1 DePIN AI compute network powered by *
 
 ---
 
+## 🏦 Genesis Allocation (50,000 QVNC)
+
+At block 0 (Genesis), a fixed allocation of 50,000.00000000 QVNC was minted into 8 strictly defined, verifiable cold and active on-chain operational buckets. There is no hidden minting, private founder backdoor, or unverified supply.
+
+| Bucket | Address | Amount (QVNC) | Mode | Purpose |
+|---|---|:---:|:---:|---|
+| Cold_Worker_Reward_Reserve | SP25CJVNG5CDrNhJqhzYqVmGYv24EJyqsQ | 13,000 | Cold | Worker reward reserve pool |
+| Cold_Team_Reserve | Sa9YBWLrF6FjQwaXXcjpHyrGJ4YzLsiVX1 | 12,500 | Cold | Core team reserve (5% hardcap) |
+| Cold_DAO_Treasury_Vault | SZjekg13eHqJKEcwt6P92A3XU8ETfZt8sP | 9,500 | Cold | DAO Treasury vault |
+| Cold_Launch_Distribution | SXj6w7JWCXCF5JwERqYrY5xPLKrnp72tNk | 7,500 | Cold | Strategic launch distribution |
+| Cold_Liquidity_Ops | SiyCrHSwuFSuKTW6S5iDc6e11eEJocAvbQ | 3,000 | Cold | Infrastructure & liquidity reserve |
+| Cold_Ecosystem_Grants | SVU1wDNPJ6soi9eZCoyFBnkdWaZcWv5rcS | 2,000 | Cold | Ecosystem development grants |
+| Active_Staking_Anchor | SMTGZc3cQVijVrcuy3awFiRm17vvk35gDa | 2,000 | Active | Initial consensus PoS anchor |
+| Hot_DevFee_Float | SPdSBBkFNKop3auzvFjGJpaCAdVnMQFyyd | 500 | Hot | Hub operations & bounty payouts |
+| **TOTAL** | **8 Genesis Buckets** | **50,000.00000000** | — | **100% Verifiable On-Chain** |
+
+---
+
 ## Building from Source (Linux / Ubuntu / Debian)
 
 ### 1. Install Dependencies
