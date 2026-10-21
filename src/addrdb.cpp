@@ -106,7 +106,7 @@ bool CBanDB::Read(banmap_t& banSet)
         if (memcmp(pchMsgTmp, Params().MessageStart(), sizeof(pchMsgTmp)))
             return error("%s: Invalid network magic number", __func__);
 
-        // Multi-candidate trial deserialization (NEW-12 remediation):
+        // Multi-candidate trial deserialization:
         // Detects banlist format across all upgrade paths without false-positive collisions
         // (such as legacy files having 2 entries colliding with 0x02 format marker).
         bool fLoaded = false;

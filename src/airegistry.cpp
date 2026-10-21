@@ -195,7 +195,7 @@ bool GetTxGlyphCarrier(const CTransaction& tx, unsigned int nOut, GlyphCarrierRe
     if (tx.vout[nOut].nValue != GLYPH_CARRIER_DUST) return false;
     if (tx.vout[nOut].scriptPubKey.IsUnspendable()) return false;
 
-    // Collect all glyph OP_RETURN records in the transaction (NEW-14 remediation)
+    // Collect all glyph OP_RETURN records in the transaction:
     std::vector<std::pair<size_t, GlyphCarrierRecord> > glyphOps;
     for (size_t i = 0; i < tx.vout.size(); ++i) {
         GlyphCarrierRecord rec;

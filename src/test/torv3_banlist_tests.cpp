@@ -234,11 +234,11 @@ BOOST_AUTO_TEST_CASE(banlist_v2_entry_corrupts_following_entries)
 
 
 // ---------------------------------------------------------------------------
-// Banlist upgrade robustness (NEW-12 remediation):
+// Banlist upgrade robustness:
 // Verifies that a legacy banlist with EXACTLY 2 entries (where compact-size
 // writes 0x02 as the count) is not misidentified as a new-format marker.
 // ---------------------------------------------------------------------------
-BOOST_AUTO_TEST_CASE(legacy_banlist_2_entries_upgrade_collision_remediated)
+BOOST_AUTO_TEST_CASE(legacy_banlist_2_entries_upgrade_collision_robustness)
 {
     banmap_t legacyBans;
     CNetAddr ip1, ip2;

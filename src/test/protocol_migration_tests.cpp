@@ -25,9 +25,9 @@ static const char* SEED =
     "kalwfcd7ia3gcwksq7yipu3b2lseibic6ytmawkbvq7odlleic6lifqd.onion";
 
 // ---------------------------------------------------------------------------
-// QV-2026-003: does the Tor v3 address now survive a round trip?
+// Tor v3 address round trip persistence under protocol v70016
 // ---------------------------------------------------------------------------
-BOOST_AUTO_TEST_CASE(torv3_roundtrip_now_fixed)
+BOOST_AUTO_TEST_CASE(torv3_roundtrip_protocol_v70016)
 {
     CNetAddr a;
     BOOST_REQUIRE(a.SetSpecial(SEED));
@@ -176,7 +176,7 @@ BOOST_AUTO_TEST_CASE(peersdat_v1_migration_hook_is_ineffective)
 }
 
 // ---------------------------------------------------------------------------
-// QV-2026-002: signature must not be replayable into a different transaction.
+// PoUS oracle attestation: signature must not be replayable into a different transaction.
 // ---------------------------------------------------------------------------
 BOOST_AUTO_TEST_CASE(pous_signature_not_replayable_sighash_all)
 {

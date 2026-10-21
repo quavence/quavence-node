@@ -1,7 +1,23 @@
+# Build products and binary executables
 *.tar.gz
-
 *.exe
 *.pdb
+*.dmg
+*.iso
+/quavenced
+/quavence-cli
+/quavence-tx
+/quavence-qt
+/src/quavenced
+/src/quavence-cli
+/src/quavence-tx
+/src/qt/quavence-qt
+/src/test/test_blackmore
+/src/qt/test/test_blackmore-qt
+/src/qt/blackmore-qt_test
+bitcoin-qt_test
+
+# Legacy binaries (Bitcoin / BlackCoin More)
 src/bitcoin
 src/bitcoind
 src/bitcoin-cli
@@ -10,26 +26,35 @@ src/bitcoin-node
 src/bitcoin-tx
 src/bitcoin-util
 src/bitcoin-wallet
-src/test/fuzz/fuzz
-src/test/test_bitcoin
-src/qt/test/test_bitcoin-qt
+src/blackmore
+src/blackmored
+src/blackmore-cli
+src/blackmore-tx
+src/qt/blackmore-qt
+src/qt/bitcoin-qt
+Bitcoin-Qt.app
+Blackmore-Qt.app
 
-# autoreconf
+# Autotools and build system outputs
 Makefile.in
+Makefile
+!depends/Makefile
+Makefile.am.user
+Makefile.test
 aclocal.m4
 autom4te.cache/
+build-aux/compile
 build-aux/config.guess
 build-aux/config.sub
 build-aux/depcomp
 build-aux/install-sh
 build-aux/ltmain.sh
 build-aux/m4/libtool.m4
-build-aux/m4/lt~obsolete.m4
 build-aux/m4/ltoptions.m4
 build-aux/m4/ltsugar.m4
 build-aux/m4/ltversion.m4
+build-aux/m4/lt~obsolete.m4
 build-aux/missing
-build-aux/compile
 build-aux/test-driver
 config.cache
 config.log
@@ -42,21 +67,28 @@ src/config/stamp-h1
 src/obj
 share/setup.nsi
 share/qt/Info.plist
-
 src/univalue/gen
 
+# Qt compilation and MOC outputs
 src/qt/*.moc
 src/qt/moc_*.cpp
 src/qt/forms/ui_*.h
-
 src/qt/test/moc*.cpp
+qrc_*.cpp
+*.qm
+background.tiff*
+*.background.tiff
 
-src/qt/bitcoin-qt.config
-src/qt/bitcoin-qt.creator
-src/qt/bitcoin-qt.creator.user
-src/qt/bitcoin-qt.files
-src/qt/bitcoin-qt.includes
+# Qt Creator and IDE files
+src/qt/*.config
+src/qt/*.creator
+src/qt/*.creator.user
+src/qt/*.files
+src/qt/*.includes
+.vscode/*
+.vs/*
 
+# Object files and libraries
 .deps
 .dirstamp
 .libs
@@ -69,52 +101,30 @@ src/qt/bitcoin-qt.includes
 *.o
 *.o-*
 *.a
+*.lo
+*.la
 *.pb.cc
 *.pb.h
-*.dat
 
+# Database and runtime logs
+*.dat
 *.log
 *.trs
-*.dmg
-*.iso
+*.out
 
+# Header generations and patches
 *.json.h
 *.raw.h
-
-# Only ignore unexpected patches
 *.patch
 !depends/patches/**/*.patch
 
-#libtool object files
-*.lo
-*.la
-
-# Compilation and Qt preprocessor part
-*.qm
-Makefile
-!depends/Makefile
-src/qt/bitcoin-qt
-Bitcoin-Qt.app
-background.tiff*
-
-# Qt Creator
-Makefile.am.user
-
-# Unit-tests
-Makefile.test
-bitcoin-qt_test
-
-# Resources cpp
-qrc_*.cpp
-
-# Mac specific
+# macOS specific
 .DS_Store
 build
+osx_volname
+dist/
 
-# Previous releases
-releases
-
-#lcov
+# Coverage and testing outputs
 *.gcno
 *.gcda
 /*.info
@@ -124,102 +134,30 @@ fuzz.coverage/
 coverage_percent.txt
 /cov_tool_wrapper.sh
 qa-assets/
-
-#build tests
 linux-coverage-build
 linux-build
 win32-build
 test/config.ini
 test/cache/*
 test/.mypy_cache/
-
+src/test/buildenv.py
 !src/leveldb*/Makefile
-
 /doc/doxygen/
-
 libbitcoinconsensus.pc
 contrib/devtools/split-debug.sh
-
-# Output from running db4 installation
-db4/
-
-# clang-check
-*.plist
-
-osx_volname
-dist/
-*.background.tiff
-
 /guix-build-*
 
-# Blackcoin More
-src/blackmore
-src/blackmored
-src/blackmore-cli
-src/blackmore-tx
-src/test/test_blackmore
-src/qt/blackmore-qt_test
-src/qt/test/test_blackmore-qt
-qa/pull-tester/run-bitcoind-for-test.sh
-qa/pull-tester/tests_config.py
-
-
-#Visual Studio
-.vscode/*
-.vs/*
-
-# Output from running db6 installation
+# Berkeley DB installation output
+db4/
 db6/
 
-# Unit-tests
+# Clang / Analyzer
+*.plist
 
-src/test/buildenv.py
-
-# Compilation and Qt preprocessor part
-src/qt/blackmore-qt
-Blackmore-Qt.app
-src/qt/blackmore-qt.config
-src/qt/blackmore-qt.creator
-src/qt/blackmore-qt.creator.user
-src/qt/blackmore-qt.files
-src/qt/blackmore-qt.includes
-
-# Build artifacts
+# Release archives and build directories
+releases/
 build-*/
-*.log
-contrib/cross-build-win64-wallet.sh
 
-
-# Node runtime data — local only, never commit
-wsl-stake-node/
-wsl-chain-reset-*/
-deleted-wsl-stake-node-*/
+# Node runtime local data
 *-stake-node/
-wallet-passphrase.txt
 quavence.conf
-
-# Logs, dumps, and temporary outputs
-*.out
-
-# Internal specs and design notes
-coin-spec/
-
-# Local test, smoke, and utility scripts
-scripts/batch8_*
-scripts/admin_smoke_*
-scripts/write_*
-scripts/commit_msg_*
-scripts/run_tests_live.sh
-scripts/verify_qt_qrc.sh
-
-# Local genesis mining and setup/deployment utilities
-contrib/BUILD_AND_LAUNCH.txt
-contrib/deploy-vps-binary.sh
-contrib/genesis_mine*
-contrib/genesis_out.txt
-contrib/install-deps-debian.sh
-contrib/premine-relaunch-notes.txt
-contrib/scripts/
-contrib/vps-*.sh
-contrib/*.conf.example
-contrib/wsl-*.txt
