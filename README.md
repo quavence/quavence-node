@@ -68,6 +68,16 @@ Starting at block height **91,450** (`nDevFundActivationHeight`), proof-of-stake
 
 ---
 
+## 🛡️ Consensus Architecture & PoUS Oracle Governance
+
+Quavence enforces a clear architectural separation between base L1 consensus and layer-2 compute attestation:
+
+* **Layer-1 Core Consensus (100% Permissionless PoS 3.0)**: Block production, transaction validation, and peer-to-peer settlement are fully decentralized and permissionless. Any node holding a non-zero UTXO balance can stake and validate blocks without allowlists, registration, or third-party authorization.
+* **PoUS Compute Attestation Layer (Oracle-Anchored Boost)**: Dynamic PoUS staking weight multipliers (+20% to +50%) and compute dividend routing are verified via cryptographic task attestations (`src/airegistry.cpp`). To prevent Sybil exploitation and fake compute spam during Phase 01 Bootstrap, attestation records require cryptographic authorization anchored by the protocol oracle keys (`aiHubKeyID`, `aiPoolKeyID`), with strict signature enforcement active since block 6,500.
+* **Decentralization Roadmap**: In accordance with Phase 02/03 milestones, oracle attestation authority transitions to threshold multisig validator sets governed by on-chain DAO proposals.
+
+---
+
 ## Building from Source (Linux / Ubuntu / Debian)
 
 ### 1. Install Dependencies
