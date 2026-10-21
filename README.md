@@ -49,6 +49,17 @@ Quavence enforces a strict mathematical supply ceiling of **200,000.00000000 QVN
 
 ---
 
+## ⚙️ Protocol Coinstake Reward Split (Height 91,450+)
+
+Starting at block height **91,450** (`nDevFundActivationHeight`), proof-of-stake coinstake rewards incorporate an automated 15% protocol funding split (`src/main.cpp:1825-1835`) designed to sustainably subsidize decentralized compute workers and network infrastructure:
+
+* **Staker / Validator Share (85.0%)**: The vast majority (85%) of block rewards is always retained directly by the staking node.
+* **AI Worker Compute Pool (4.5%)**: 30% of the protocol allocation (4.5% of total block reward) routes to `ScmZ5fYVTADyMcH11CXtf9iC9qVeRHA31M` to fund autonomous PoUS inference dividends for DePIN compute workers.
+* **Core Infrastructure & Grants (10.5%)**: The remaining 70% of the protocol allocation (10.5% of total block reward) routes to `SXbKabuHh7xn3QuXF7DMG758D9j4rVcL6V` for server infrastructure, seed node hosting, and DAO ecosystem grants.
+* **Activation Horizon**: Prior to height 91,450, 100% of the block subsidy is minted directly to the staking validator without deductions.
+
+---
+
 ## Building from Source (Linux / Ubuntu / Debian)
 
 ### 1. Install Dependencies
