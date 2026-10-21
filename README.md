@@ -1,10 +1,18 @@
 # Quavence Core Node & PoUS All-in-One Wallet (QVNC)
 
-[![Release](https://img.shields.io/badge/release-v15.0.0-blue.svg)](https://github.com/quavence/quavence-node/releases)
+[![Release](https://img.shields.io/badge/release-v15.1.9-blue.svg)](https://github.com/quavence/quavence-node/releases)
 [![Consensus](https://img.shields.io/badge/consensus-PoS3.0%20%2B%20PoUS-emerald.svg)](https://quavence.com)
 [![License](https://img.shields.io/badge/license-MIT%20%2F%20BSL--1.1-green.svg)](LICENSE-ADDITIONS)
 
 Quavence (QVNC) is a decentralized Layer-1 DePIN AI compute network powered by **Proof-of-Useful-Stake (PoUS)**. It combines high-throughput PoS 3.0 staking with autonomous on-chain AI worker attestation, knowledge-base RAG verification, and real-time staking yield boosts.
+
+### 🌐 Official Resources & Documentation
+* **Website & DAO Hub:** [https://quavence.com](https://quavence.com)
+* **Architecture Docs & Whitepaper:** [https://quavence.com/docs](https://quavence.com/docs)
+* **Blockchain Explorer:** [https://explorer.quavence.com](https://explorer.quavence.com)
+* **Bitcointalk Official ANN:** [Topic #5592414](https://bitcointalk.org/index.php?topic=5592414.0)
+* **Discord Community:** [discord.gg/5c8jY9aCa7](https://discord.gg/5c8jY9aCa7)
+* **X / Twitter:** [@QuavenceX](https://x.com/QuavenceX)
 
 ---
 
