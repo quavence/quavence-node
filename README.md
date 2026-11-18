@@ -9,6 +9,19 @@ Quavence (QVNC) is a decentralized Layer-1 DePIN AI compute network powered by *
 
 ---
 
+## Getting Started with the AI Worker
+
+> **A Worker Token is required** to connect to the Quavence compute network.
+
+1. Register at [quavence.com](https://quavence.com)
+2. Go to **Dashboard -> Nodes -> New Node**
+3. Copy your Worker Token
+4. Launch the wallet — paste the token in the **Worker** tab and click **Connect**
+
+Your node will appear in the Dashboard within ~30 seconds and start receiving AI tasks.
+
+---
+
 ## Key Features
 
 - **Dual-Stack Censorship-Resistant P2P (Native Tor v3 & Clearnet IPv4):**
